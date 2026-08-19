@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Artists Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="header">
+    <div class="header-content">
+        <div>
+            <div class="logo">
+                SPOTIFY TRACKER
+            </div>
+            <h1>Artists Dashboard</h1>
+            <p>
+                Artistes suivis et nouvelles sorties
+            </p>
+        </div>
+        <div class="date-box">
+            <span>Aujourd'hui</span>
+            <strong id="current-date">
+                --
+            </strong>
+        </div>
+    </div>
+</header>
+<!-- ======================================================
+     NAVIGATION
+====================================================== -->
+<nav class="navigation">
+    <button
+        class="nav-button active"
+        data-page="releases"
+    >
+        🎵 Sorties du jour
+    </button>
+    <button
+        class="nav-button"
+        data-page="artists"
+    >
+        👤 Artistes
+    </button>
+    <button
+        class="nav-button"
+        data-page="genres"
+    >
+        🎧 Genres
+    </button>
+</nav>
+<main>
+<!-- ======================================================
+     PAGE SORTIES
+====================================================== -->
+<section
+    id="page-releases"
+    class="page active"
+>
+    <div class="page-header">
+        <div>
+            <span class="section-label">
+                AUJOURD'HUI
+            </span>
+            <h2 id="release-title">
+                Nouvelles sorties
+            </h2>
+            <p id="release-description">
+                Chargement...
+            </p>
+        </div>
+        <div class="counter">
+            <strong id="release-count">
+                0
+            </strong>
+            <span>
+                sorties
+            </span>
+        </div>
+    </div>
+    <div class="search-container">
+        <input
+            type="search"
+            id="release-search"
+            placeholder="Rechercher une musique ou un artiste..."
+        >
+    </div>
+    <div
+        id="release-list"
+        class="release-grid"
+    >
+        <div class="loading">
+            Chargement des sorties...
+        </div>
+    </div>
+</section>
+<!-- ======================================================
+     PAGE ARTISTES
+====================================================== -->
+<section
+    id="page-artists"
+    class="page"
+>
+    <div class="page-header">
+        <div>
+            <span class="section-label">
+                BASE DE DONNÉES
+            </span>
+            <h2>
+                Artistes
+            </h2>
+            <p>
+                Tous les artistes présents dans artistes.json
+            </p>
+        </div>
+        <div class="counter">
+            <strong id="artist-count">
+                0
+            </strong>
+            <span>
+                artistes
+            </span>
+        </div>
+    </div>
+    <div class="toolbar">
+        <input
+            type="search"
+            id="artist-search"
+            placeholder="Rechercher un artiste..."
+        >
+        <select id="artist-sort">
+            <option value="name">
+                Nom A → Z
+            </option>
+            <option value="followers">
+                Nombre d'abonnés
+            </option>
+            <option value="popularity">
+                Popularité
+            </option>
+        </select>
+    </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>
+                        Artiste
+                    </th>
+                    <th>
+                        Abonnés
+                    </th>
+                    <th>
+                        Auditeurs mensuels
+                    </th>
+                    <th>
+                        Popularité
+                    </th>
+                    <th>
+                        Genres
+                    </th>
+                    <th>
+                        Spotify
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="artist-table">
+            </tbody>
+        </table>
+    </div>
+</section>
+<!-- ======================================================
+     PAGE GENRES
+====================================================== -->
+<section
+    id="page-genres"
+    class="page"
+>
+    <div class="page-header">
+        <div>
+            <span class="section-label">
+                RÉPARTITION
+            </span>
+            <h2>
+                Genres musicaux
+            </h2>
+            <p>
+                Répartition des artistes suivis par genre.
+            </p>
+        </div>
+    </div>
+    <div
+        id="genre-list"
+        class="genre-grid"
+    >
+    </div>
+</section>
+</main>
+<footer>
+    <div>
+        Spotify Artists Dashboard
+    </div>
+    <div>
+        Données : artistes.json / sorties.json
+    </div>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>
