@@ -2,8 +2,8 @@
    CONFIGURATION
 ====================================================== */
 
-const ARTISTS_FILE = "./data/artistes.json";
-const RELEASES_FILE = "./data/sorties.json";
+const ARTISTS_FILE = "data/artistes.json";
+const RELEASES_FILE = "data/sorties.json";
 
 
 /* ======================================================
