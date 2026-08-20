@@ -1,5 +1,38 @@
 {
-  "releases": [
+  "tracks": [
+    {
+      "id": "test-005",
+      "name": "Tomorrow",
+      "artist_name": "Yamê",
+      "artist_id": "0wiCfDEHaEcPkKZOi7Nivl",
+      "album_name": "Tomorrow",
+      "release_type": "single",
+      "release_date": "2026-08-20",
+      "url": "https://open.spotify.com/",
+      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
+    },
+    {
+      "id": "test-006",
+      "name": "Demain",
+      "artist_name": "Gazo",
+      "artist_id": "5gqmbbfjcikQBzPB5Hv13I",
+      "album_name": "Demain",
+      "release_type": "single",
+      "release_date": "2026-08-20",
+      "url": "https://open.spotify.com/",
+      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
+    },
+    {
+      "id": "test-007",
+      "name": "After Hours",
+      "artist_name": "FKJ",
+      "artist_id": "2FwDTncULUnmANIh7qKa5z",
+      "album_name": "After Hours",
+      "release_type": "single",
+      "release_date": "2026-08-20",
+      "url": "https://open.spotify.com/",
+      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
+    },
     {
       "id": "test-001",
       "name": "Midnight",
@@ -41,39 +74,6 @@
       "album_name": "Summer Dreams",
       "release_type": "single",
       "release_date": "2026-08-19",
-      "url": "https://open.spotify.com/",
-      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
-    },
-    {
-      "id": "test-005",
-      "name": "Tomorrow",
-      "artist_name": "Yamê",
-      "artist_id": "0wiCfDEHaEcPkKZOi7Nivl",
-      "album_name": "Tomorrow",
-      "release_type": "single",
-      "release_date": "2026-08-20",
-      "url": "https://open.spotify.com/",
-      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
-    },
-    {
-      "id": "test-006",
-      "name": "Demain",
-      "artist_name": "Gazo",
-      "artist_id": "5gqmbbfjcikQBzPB5Hv13I",
-      "album_name": "Demain",
-      "release_type": "single",
-      "release_date": "2026-08-20",
-      "url": "https://open.spotify.com/",
-      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
-    },
-    {
-      "id": "test-007",
-      "name": "After Hours",
-      "artist_name": "FKJ",
-      "artist_id": "2FwDTncULUnmANIh7qKa5z",
-      "album_name": "After Hours",
-      "release_type": "single",
-      "release_date": "2026-08-20",
       "url": "https://open.spotify.com/",
       "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
     },
