@@ -34,12 +34,23 @@
       "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
     },
     {
-      "id": "test-001",
-      "name": "Midnight",
-      "artist_name": "Oxlade",
-      "artist_id": "3WTrdbZU99dgTtt3ZkyamT",
-      "album_name": "Midnight",
+      "id": "test-003",
+      "name": "Nouveau départ",
+      "artist_name": "Tiakola",
+      "artist_id": "3vUMXQ9kPnZAQkMkZZ7Hfh",
+      "album_name": "Nouveau départ",
       "release_type": "single",
+      "release_date": "2026-08-19",
+      "url": "https://open.spotify.com/",
+      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
+    },
+    {
+      "id": "test-008",
+      "name": "Test EP",
+      "artist_name": "Shaboozey",
+      "artist_id": "3y2cIKLjiOlp1Np37WiUdH",
+      "album_name": "Test EP",
+      "release_type": "ep",
       "release_date": "2026-08-19",
       "url": "https://open.spotify.com/",
       "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
@@ -56,11 +67,11 @@
       "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
     },
     {
-      "id": "test-003",
-      "name": "Nouveau départ",
-      "artist_name": "Tiakola",
-      "artist_id": "3vUMXQ9kPnZAQkMkZZ7Hfh",
-      "album_name": "Nouveau départ",
+      "id": "test-001",
+      "name": "Midnight",
+      "artist_name": "Oxlade",
+      "artist_id": "3WTrdbZU99dgTtt3ZkyamT",
+      "album_name": "Midnight",
       "release_type": "single",
       "release_date": "2026-08-19",
       "url": "https://open.spotify.com/",
@@ -73,17 +84,6 @@
       "artist_id": "00x1fYSGhdqScXBRpSj3DW",
       "album_name": "Summer Dreams",
       "release_type": "single",
-      "release_date": "2026-08-19",
-      "url": "https://open.spotify.com/",
-      "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
-    },
-    {
-      "id": "test-008",
-      "name": "Test EP",
-      "artist_name": "Shaboozey",
-      "artist_id": "3y2cIKLjiOlp1Np37WiUdH",
-      "album_name": "Test EP",
-      "release_type": "ep",
       "release_date": "2026-08-19",
       "url": "https://open.spotify.com/",
       "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
