@@ -1,6 +1,28 @@
 {
   "tracks": [
     {
+      "id": "32JuJHtU0WdZKhBLavdIwk",
+      "name": "On my mind (Acoustic Version) - Sencillo par Yamê | Spotify",
+      "artist_name": "Yamê",
+      "artist_id": "0wiCfDEHaEcPkKZOi7Nivl",
+      "album_name": "On my mind (Acoustic Version) - Sencillo par Yamê | Spotify",
+      "release_type": "single",
+      "release_date": "2026-08-21",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/32JuJHtU0WdZKhBLavdIwk"
+    },
+    {
+      "id": "4uC0Siq07QpZ1h5H7sTgK5",
+      "name": "Meet Me by the Ocean - Sencillo par Stick Figure | Spotify",
+      "artist_name": "Stick Figure",
+      "artist_id": "5SXEylV07TC57eanSxxg4R",
+      "album_name": "Meet Me by the Ocean - Sencillo par Stick Figure | Spotify",
+      "release_type": "single",
+      "release_date": "2026-08-21",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/4uC0Siq07QpZ1h5H7sTgK5"
+    },
+    {
       "id": "1pBaKkK2dpYKFPwbS09ay1",
       "name": "CALVIN KLEIN - Sencillo par MICKY | Spotify",
       "artist_name": "MICKY",
@@ -43,6 +65,17 @@
       "release_date": "2026-08-20",
       "url": "https://open.spotify.com/",
       "album_image": "https://i.scdn.co/image/ab67616d0000b273e4e5f5b7e5d7c8c4f0a1c1c1"
+    },
+    {
+      "id": "0ZKov28foIbLe3zpp2rH0M",
+      "name": "Soninka Drill - EP par ZÉZÉ | Spotify",
+      "artist_name": "ZÉZÉ",
+      "artist_id": "7MofILtp6t049hNJxALw15",
+      "album_name": "Soninka Drill - EP par ZÉZÉ | Spotify",
+      "release_type": "single",
+      "release_date": "2026-08-19",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/0ZKov28foIbLe3zpp2rH0M"
     },
     {
       "id": "test-003",
