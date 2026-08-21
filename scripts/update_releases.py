@@ -14,7 +14,7 @@ from playwright.async_api import (
 
 
 # ============================================================
-# CONFIGURATION EXISTANTE
+# CONFIGURATION
 # ============================================================
 
 ARTISTS_FILE = Path("data/artistes.json")
@@ -24,41 +24,31 @@ SPOTIFY_ARTIST_URL = (
     "https://open.spotify.com/artist/{}"
 )
 
-# ============================================================
-# OPTIMISATION
-# ============================================================
+# ------------------------------------------------------------
+# PERFORMANCE
+# ------------------------------------------------------------
 
 # Nombre d'artistes traités simultanément.
-#
-# Commence à 8 sur GitHub Actions.
-#
-# Tu pourras tester :
-#
-#   8
-#   12
-#   16
-#
-# et comparer les temps.
 CONCURRENCY = 8
 
-# Le navigateur n'est jamais affiché.
+# Navigateur invisible.
 HEADLESS = True
 
-# Timeout maximum d'une navigation.
-PAGE_TIMEOUT = 15_000
+# Timeout général d'une page.
+PAGE_TIMEOUT = 8_000
 
-# Petite attente après le hover.
-TOOLTIP_WAIT = 150
+# Temps d'attente après le survol de l'année.
+TOOLTIP_WAIT = 200
 
-# Fenêtre de recherche conservée pour
-# rester compatible avec ton système actuel.
+# Fenêtre conservée pour compatibilité avec
+# ton ancien système.
 DAYS_TO_SCAN = 7
 
 TIMEZONE = "Europe/Paris"
 
 
 # ============================================================
-# MOIS FRANÇAIS
+# MOIS
 # ============================================================
 
 MONTHS_FR = {
@@ -99,7 +89,7 @@ def date_days_ago(days):
 
 def parse_spotify_date(text):
     """
-    Convertit une date Spotify française :
+    Transforme :
 
         21 août 2026
 
@@ -163,7 +153,7 @@ def parse_spotify_date(text):
 
 
 # ============================================================
-# JSON EXISTANT
+# JSON
 # ============================================================
 
 def load_json(path, default):
@@ -186,7 +176,8 @@ def load_json(path, default):
 
         print(
             f"[ERREUR JSON] "
-            f"{path}: {error}"
+            f"{path}: {error}",
+            flush=True
         )
 
         return default
@@ -289,7 +280,7 @@ def parse_releases(data):
 
 
 # ============================================================
-# URL SPOTIFY
+# URL
 # ============================================================
 
 def normalize_spotify_url(url):
@@ -306,7 +297,7 @@ def normalize_spotify_url(url):
 
 
 # ============================================================
-# BLOQUAGE DES RESSOURCES INUTILES
+# RESSOURCES INUTILES
 # ============================================================
 
 async def route_handler(route):
@@ -317,9 +308,8 @@ async def route_handler(route):
         request.resource_type
     )
 
-    # Pour récupérer les informations
-    # nous n'avons pas besoin des images,
-    # vidéos ou polices.
+    # Pas besoin des images/vidéos/fonts
+    # pour cette recherche.
     if resource_type in {
         "image",
         "media",
@@ -330,7 +320,6 @@ async def route_handler(route):
 
         return
 
-    # Tracking inutile.
     url = request.url.lower()
 
     blocked_domains = [
@@ -353,35 +342,17 @@ async def route_handler(route):
 
 
 # ============================================================
-# NOM ARTISTE
-# ============================================================
-
-async def get_artist_name(page):
-
-    try:
-
-        title = await page.title()
-
-        if title:
-
-            title = title.replace(
-                " | Spotify",
-                ""
-            ).strip()
-
-            return title
-
-    except Exception:
-        pass
-
-    return "Artiste inconnu"
-
-
-# ============================================================
 # DERNIÈRE SORTIE
 # ============================================================
 
-async def find_latest_release(page):
+async def find_latest_release(
+    page
+):
+
+    print(
+        "      → recherche dernière sortie...",
+        flush=True
+    )
 
     try:
 
@@ -391,6 +362,11 @@ async def find_latest_release(page):
         )
 
     except PlaywrightTimeoutError:
+
+        print(
+            "      ✗ aucune sortie trouvée",
+            flush=True
+        )
 
         return None
 
@@ -426,22 +402,37 @@ async def find_latest_release(page):
                     + href
                 )
 
-            return normalize_spotify_url(
+            href = normalize_spotify_url(
                 href
             )
+
+            print(
+                f"      ✓ sortie trouvée",
+                flush=True
+            )
+
+            return href
 
         except Exception:
 
             continue
 
+    print(
+        "      ✗ impossible de trouver "
+        "la dernière sortie",
+        flush=True
+    )
+
     return None
 
 
 # ============================================================
-# NOM DE LA SORTIE
+# NOM SORTIE
 # ============================================================
 
-async def get_release_name(page):
+async def get_release_name(
+    page
+):
 
     try:
 
@@ -449,10 +440,12 @@ async def get_release_name(page):
 
         if title:
 
-            return title.replace(
+            title = title.replace(
                 " | Spotify",
                 ""
             ).strip()
+
+            return title
 
     except Exception:
         pass
@@ -461,10 +454,21 @@ async def get_release_name(page):
 
 
 # ============================================================
-# DATE EXACTE SPOTIFY
+# DATE EXACTE
 # ============================================================
 
-async def get_exact_release_date(page):
+async def get_exact_release_date(
+    page
+):
+
+    print(
+        "      → recherche de l'année...",
+        flush=True
+    )
+
+    # --------------------------------------------------------
+    # On cherche directement les années visibles.
+    # --------------------------------------------------------
 
     try:
 
@@ -475,20 +479,28 @@ async def get_exact_release_date(page):
 
     except PlaywrightTimeoutError:
 
+        print(
+            "      ✗ année introuvable",
+            flush=True
+        )
+
         return None
 
-    candidates = page.locator(
+    years = page.locator(
         "text=/\\b(19|20)\\d{2}\\b/"
     )
 
-    count = await candidates.count()
+    count = await years.count()
 
-    if count == 0:
-        return None
+    print(
+        f"      → {count} élément(s) contenant "
+        f"une année trouvé(s)",
+        flush=True
+    )
 
     for i in range(count):
 
-        element = candidates.nth(i)
+        element = years.nth(i)
 
         try:
 
@@ -505,18 +517,25 @@ async def get_exact_release_date(page):
             ):
                 continue
 
+            print(
+                f"      → hover sur {text}...",
+                flush=True
+            )
+
             # ------------------------------------------------
-            # HOVER SUR L'ANNÉE
+            # SURVOL
             # ------------------------------------------------
 
-            await element.hover()
+            await element.hover(
+                timeout=3_000
+            )
 
             await page.wait_for_timeout(
                 TOOLTIP_WAIT
             )
 
             # ------------------------------------------------
-            # CONTENU DU BODY
+            # RÉCUPÉRATION DU BODY
             # ------------------------------------------------
 
             body_text = (
@@ -526,7 +545,7 @@ async def get_exact_release_date(page):
             )
 
             # ------------------------------------------------
-            # FRANÇAIS
+            # DATES FRANÇAISES
             # ------------------------------------------------
 
             matches = re.findall(
@@ -544,21 +563,26 @@ async def get_exact_release_date(page):
                 flags=re.IGNORECASE
             )
 
-            if matches:
+            for date_text in reversed(
+                matches
+            ):
 
-                for date_text in reversed(
-                    matches
-                ):
+                result = parse_spotify_date(
+                    date_text
+                )
 
-                    result = parse_spotify_date(
-                        date_text
+                if result:
+
+                    print(
+                        f"      ✓ date exacte : "
+                        f"{result}",
+                        flush=True
                     )
 
-                    if result:
-                        return result
+                    return result
 
             # ------------------------------------------------
-            # ANGLAIS
+            # DATES ANGLAISES
             # ------------------------------------------------
 
             matches_en = re.findall(
@@ -575,38 +599,55 @@ async def get_exact_release_date(page):
                 flags=re.IGNORECASE
             )
 
-            if matches_en:
+            for date_text in reversed(
+                matches_en
+            ):
 
-                for date_text in reversed(
-                    matches_en
-                ):
+                try:
 
-                    try:
+                    parsed = datetime.strptime(
+                        date_text,
+                        "%B %d, %Y"
+                    )
 
-                        parsed = datetime.strptime(
-                            date_text,
-                            "%B %d, %Y"
-                        )
+                    result = parsed.strftime(
+                        "%Y-%m-%d"
+                    )
 
-                        return parsed.strftime(
-                            "%Y-%m-%d"
-                        )
+                    print(
+                        f"      ✓ date exacte : "
+                        f"{result}",
+                        flush=True
+                    )
 
-                    except ValueError:
-                        pass
+                    return result
+
+                except ValueError:
+                    pass
+
+        except PlaywrightTimeoutError:
+
+            continue
 
         except Exception:
 
             continue
 
+    print(
+        "      ✗ date exacte non trouvée",
+        flush=True
+    )
+
     return None
 
 
 # ============================================================
-# IDENTIFIANT DE SORTIE
+# CLÉ DE DÉDOUBLONNAGE
 # ============================================================
 
-def release_key(release):
+def release_key(
+    release
+):
 
     release_id = release.get(
         "id"
@@ -655,25 +696,13 @@ def normalize_release(
     release_date
 ):
 
-    artist_id = str(
-        artist.get(
-            "id",
-            ""
-        )
-    )
-
-    artist_name = str(
-        artist.get(
-            "name",
-            "Artiste inconnu"
-        )
-    )
-
     parsed = urlparse(
         release_url
     )
 
-    parts = parsed.path.split("/")
+    parts = parsed.path.split(
+        "/"
+    )
 
     release_id = ""
 
@@ -681,24 +710,23 @@ def normalize_release(
 
         release_id = parts[-1]
 
-    # --------------------------------------------------------
-    # On ne connaît pas forcément le type avec certitude.
-    # Le comportement existant considère "single" par défaut.
-    # --------------------------------------------------------
-
-    release_type = "single"
-
     return {
         "id": release_id,
         "name": str(
             release_name
         ),
-        "artist_name": artist_name,
-        "artist_id": artist_id,
+        "artist_name": artist.get(
+            "name",
+            "Artiste inconnu"
+        ),
+        "artist_id": artist.get(
+            "id",
+            ""
+        ),
         "album_name": str(
             release_name
         ),
-        "release_type": release_type,
+        "release_type": "single",
         "release_date": str(
             release_date
         ),
@@ -720,13 +748,24 @@ async def process_artist(
 
     start = time.perf_counter()
 
+    artist_name = artist.get(
+        "name",
+        "Artiste inconnu"
+    )
+
     artist_id = artist.get(
         "id"
     )
 
-    artist_name = artist.get(
-        "name",
-        "Artiste inconnu"
+    prefix = (
+        f"[{index}/{total}] "
+        f"{artist_name}"
+    )
+
+    print()
+    print(
+        prefix,
+        flush=True
     )
 
     result = {
@@ -739,17 +778,26 @@ async def process_artist(
 
     if not artist_id:
 
-        result["status"] = "error"
-
         result["reason"] = (
             "ID Spotify absent."
         )
 
+        print(
+            f"    ✗ {result['reason']}",
+            flush=True
+        )
+
         return result
 
-    page = await context.new_page()
+    page = None
 
     try:
+
+        # ----------------------------------------------------
+        # PAGE
+        # ----------------------------------------------------
+
+        page = await context.new_page()
 
         artist_url = (
             SPOTIFY_ARTIST_URL.format(
@@ -757,9 +805,10 @@ async def process_artist(
             )
         )
 
-        # ====================================================
-        # PAGE ARTISTE
-        # ====================================================
+        print(
+            "    → chargement page artiste...",
+            flush=True
+        )
 
         await page.goto(
             artist_url,
@@ -767,9 +816,14 @@ async def process_artist(
             timeout=PAGE_TIMEOUT
         )
 
-        # ====================================================
+        print(
+            "    ✓ page artiste chargée",
+            flush=True
+        )
+
+        # ----------------------------------------------------
         # DERNIÈRE SORTIE
-        # ====================================================
+        # ----------------------------------------------------
 
         release_url = (
             await find_latest_release(
@@ -779,21 +833,23 @@ async def process_artist(
 
         if not release_url:
 
-            result["status"] = (
-                "unknown"
-            )
+            result["status"] = "unknown"
 
             result["reason"] = (
-                "La page Spotify de l'artiste "
-                "a été chargée mais aucune "
-                "dernière sortie n'a été trouvée."
+                "Aucune dernière sortie "
+                "détectée."
             )
 
             return result
 
-        # ====================================================
-        # PAGE SORTIE
-        # ====================================================
+        # ----------------------------------------------------
+        # PAGE DE LA SORTIE
+        # ----------------------------------------------------
+
+        print(
+            "      → chargement page sortie...",
+            flush=True
+        )
 
         await page.goto(
             release_url,
@@ -801,15 +857,30 @@ async def process_artist(
             timeout=PAGE_TIMEOUT
         )
 
+        print(
+            "      ✓ page sortie chargée",
+            flush=True
+        )
+
+        # ----------------------------------------------------
+        # NOM
+        # ----------------------------------------------------
+
         release_name = (
             await get_release_name(
                 page
             )
         )
 
-        # ====================================================
+        print(
+            f"      → sortie : "
+            f"{release_name}",
+            flush=True
+        )
+
+        # ----------------------------------------------------
         # DATE EXACTE
-        # ====================================================
+        # ----------------------------------------------------
 
         release_date = (
             await get_exact_release_date(
@@ -819,21 +890,19 @@ async def process_artist(
 
         if not release_date:
 
-            result["status"] = (
-                "unknown"
-            )
+            result["status"] = "unknown"
 
             result["reason"] = (
-                "La dernière sortie a été trouvée, "
-                "mais la date exacte Spotify n'a "
-                "pas pu être récupérée."
+                "La sortie a été trouvée, "
+                "mais la date exacte Spotify "
+                "n'a pas été récupérée."
             )
 
             return result
 
-        # ====================================================
-        # OBJET COMPATIBLE AVEC SORTIES.JSON
-        # ====================================================
+        # ----------------------------------------------------
+        # OBJET
+        # ----------------------------------------------------
 
         release = normalize_release(
             artist=artist,
@@ -844,18 +913,24 @@ async def process_artist(
 
         result["release"] = release
 
-        # ====================================================
-        # DÉCISION
-        # ====================================================
+        # ----------------------------------------------------
+        # JUSTIFICATION
+        # ----------------------------------------------------
 
         if release_date == today():
 
             result["status"] = "today"
 
             result["reason"] = (
-                f"La date exacte Spotify "
-                f"({release_date}) correspond "
+                f"La dernière sortie Spotify "
+                f"est datée exactement du "
+                f"{release_date}, qui correspond "
                 f"à la date du jour."
+            )
+
+            print(
+                "    ★ SORTIE DU JOUR",
+                flush=True
             )
 
         else:
@@ -864,7 +939,15 @@ async def process_artist(
 
             result["reason"] = (
                 f"La dernière sortie Spotify "
-                f"date du {release_date}."
+                f"est datée du "
+                f"{release_date}, donc ce n'est "
+                f"pas une sortie du jour."
+            )
+
+            print(
+                f"    ✓ aucune sortie aujourd'hui "
+                f"({release_date})",
+                flush=True
             )
 
         return result
@@ -874,8 +957,12 @@ async def process_artist(
         result["status"] = "error"
 
         result["reason"] = (
-            "Timeout lors de la communication "
-            "avec Spotify."
+            "Timeout Spotify/Playwright."
+        )
+
+        print(
+            f"    ✗ {result['reason']}",
+            flush=True
         )
 
         return result
@@ -885,7 +972,12 @@ async def process_artist(
         result["status"] = "error"
 
         result["reason"] = (
-            f"Erreur technique : {error}"
+            f"Erreur : {error}"
+        )
+
+        print(
+            f"    ✗ {result['reason']}",
+            flush=True
         )
 
         return result
@@ -897,57 +989,18 @@ async def process_artist(
             - start
         )
 
-        await page.close()
+        if page:
 
+            try:
+                await page.close()
+            except Exception:
+                pass
 
-# ============================================================
-# RETRY
-# ============================================================
-
-async def process_artist_with_retry(
-    context,
-    artist,
-    index,
-    total,
-    retries=2
-):
-
-    last_result = None
-
-    for attempt in range(
-        retries + 1
-    ):
-
-        result = await process_artist(
-            context=context,
-            artist=artist,
-            index=index,
-            total=total,
+        print(
+            f"    Temps : "
+            f"{result['duration']:.2f}s",
+            flush=True
         )
-
-        last_result = result
-
-        # Si tout s'est bien passé,
-        # inutile de recommencer.
-        if result["status"] in {
-            "today",
-            "old",
-            "unknown",
-        }:
-
-            return result
-
-        # Dernière tentative.
-        if attempt >= retries:
-
-            return result
-
-        # Petit délai avant retry.
-        await asyncio.sleep(
-            1 + attempt
-        )
-
-    return last_result
 
 
 # ============================================================
@@ -964,7 +1017,7 @@ async def worker(
 
     async with semaphore:
 
-        return await process_artist_with_retry(
+        return await process_artist(
             context=context,
             artist=artist,
             index=index,
@@ -1019,44 +1072,37 @@ def print_final_report(
 ):
 
     today_results = [
-        result
-        for result in results
-        if result["status"] == "today"
+        r for r in results
+        if r["status"] == "today"
     ]
 
     old_results = [
-        result
-        for result in results
-        if result["status"] == "old"
+        r for r in results
+        if r["status"] == "old"
     ]
 
     unknown_results = [
-        result
-        for result in results
-        if result["status"] == "unknown"
+        r for r in results
+        if r["status"] == "unknown"
     ]
 
     error_results = [
-        result
-        for result in results
-        if result["status"] == "error"
+        r for r in results
+        if r["status"] == "error"
     ]
 
     print()
     print()
     print("=" * 70)
-
     print(
-        "              RAPPORT FINAL"
+        "                    RAPPORT FINAL"
     )
-
     print("=" * 70)
 
     print()
 
     print(
-        f"Artistes analysés       : "
-        f"{len(results)}"
+        f"Artistes analysés      : {len(results)}"
     )
 
     print(
@@ -1075,33 +1121,31 @@ def print_final_report(
     )
 
     print(
-        f"Erreurs techniques     : "
+        f"Erreurs                 : "
         f"{len(error_results)}"
     )
 
     print(
-        f"Durée totale           : "
-        f"{total_duration:.2f} secondes"
+        f"Durée totale            : "
+        f"{total_duration:.2f}s"
     )
 
     if results:
 
         print(
-            f"Temps moyen/artiste    : "
-            f"{total_duration / len(results):.2f} secondes"
+            f"Temps moyen/artiste     : "
+            f"{total_duration / len(results):.2f}s"
         )
 
-    # ========================================================
+    # --------------------------------------------------------
     # SORTIES DU JOUR
-    # ========================================================
+    # --------------------------------------------------------
 
     print()
     print("=" * 70)
-
     print(
         "                    SORTIES DU JOUR"
     )
-
     print("=" * 70)
 
     if not today_results:
@@ -1118,13 +1162,12 @@ def print_final_report(
             release = result["release"]
 
             print()
-
             print(
                 f"✓ {release['artist_name']}"
             )
 
             print(
-                f"  {release['name']}"
+                f"  Sortie : {release['name']}"
             )
 
             print(
@@ -1132,7 +1175,7 @@ def print_final_report(
             )
 
             print(
-                f"  URL  : {release['url']}"
+                f"  URL : {release['url']}"
             )
 
             print(
@@ -1140,19 +1183,17 @@ def print_final_report(
                 f"{result['reason']}"
             )
 
-    # ========================================================
-    # À VÉRIFIER
-    # ========================================================
+    # --------------------------------------------------------
+    # IMPOSSIBLES À VÉRIFIER
+    # --------------------------------------------------------
 
     if unknown_results:
 
         print()
         print("=" * 70)
-
         print(
-            "                 À VÉRIFIER"
+            "                    À VÉRIFIER"
         )
-
         print("=" * 70)
 
         for result in unknown_results:
@@ -1169,19 +1210,17 @@ def print_final_report(
                 f"  {result['reason']}"
             )
 
-    # ========================================================
+    # --------------------------------------------------------
     # ERREURS
-    # ========================================================
+    # --------------------------------------------------------
 
     if error_results:
 
         print()
         print("=" * 70)
-
         print(
-            "                    ERREURS"
+            "                      ERREURS"
         )
-
         print("=" * 70)
 
         for result in error_results:
@@ -1200,24 +1239,34 @@ def print_final_report(
 
     print()
     print("=" * 70)
-
     print(
         "                         FIN"
     )
-
     print("=" * 70)
 
 
 # ============================================================
-# PROGRAMME PRINCIPAL
+# MAIN
 # ============================================================
 
 async def main():
 
     start = time.perf_counter()
 
+    print()
+    print("=" * 70)
+    print(
+        "        MISE À JOUR DES SORTIES SPOTIFY"
+    )
+    print("=" * 70)
+
+    print(
+        f"Date : {today()}",
+        flush=True
+    )
+
     # ========================================================
-    # CHARGEMENT DES ARTISTES
+    # ARTISTES
     # ========================================================
 
     artists_data = load_json(
@@ -1237,8 +1286,22 @@ async def main():
 
         return
 
+    print(
+        f"Artistes trouvés : {len(artists)}",
+        flush=True
+    )
+
+    # --------------------------------------------------------
+    # TEST TEMPORAIRE
+    #
+    # Décommente cette ligne si tu veux tester
+    # seulement les 5 premiers artistes.
+    # --------------------------------------------------------
+
+    # artists = artists[:5]
+
     # ========================================================
-    # CHARGEMENT DES SORTIES EXISTANTES
+    # SORTIES EXISTANTES
     # ========================================================
 
     existing_data = load_json(
@@ -1250,8 +1313,13 @@ async def main():
         existing_data
     )
 
+    print(
+        f"Sorties existantes : {len(existing)}",
+        flush=True
+    )
+
     # ========================================================
-    # INDEX DES SORTIES EXISTANTES
+    # INDEX
     # ========================================================
 
     releases_by_key = {}
@@ -1264,55 +1332,28 @@ async def main():
         ):
             continue
 
-        key = release_key(
-            release
-        )
-
-        releases_by_key[key] = release
-
-    print()
-    print("=" * 70)
-
-    print(
-        "        MISE À JOUR DES SORTIES SPOTIFY"
-    )
-
-    print("=" * 70)
-
-    print()
-
-    print(
-        f"Date : {today()}"
-    )
-
-    print(
-        f"Artistes : {len(artists)}"
-    )
-
-    print(
-        f"Sorties déjà enregistrées : "
-        f"{len(existing)}"
-    )
-
-    print(
-        f"Concurrence : {CONCURRENCY}"
-    )
-
-    print(
-        "Navigateur : Edge headless"
-    )
-
-    print()
+        releases_by_key[
+            release_key(release)
+        ] = release
 
     # ========================================================
     # PLAYWRIGHT
     # ========================================================
 
+    print(
+        "Démarrage de Playwright...",
+        flush=True
+    )
+
     async with async_playwright() as p:
 
+        print(
+            "Lancement de Chromium...",
+            flush=True
+        )
+
         browser = await p.chromium.launch(
-            channel="msedge",
-            headless=HEADLESS,
+            headless=True
         )
 
         context = await browser.new_context(
@@ -1329,13 +1370,19 @@ async def main():
             route_handler
         )
 
-        semaphore = asyncio.Semaphore(
-            CONCURRENCY
+        print(
+            f"Chromium prêt — "
+            f"{CONCURRENCY} workers",
+            flush=True
         )
 
         # ====================================================
-        # TRAITEMENT PARALLÈLE
+        # TÂCHES
         # ====================================================
+
+        semaphore = asyncio.Semaphore(
+            CONCURRENCY
+        )
 
         tasks = []
 
@@ -1356,6 +1403,11 @@ async def main():
                 )
             )
 
+        print(
+            "Lancement du traitement...",
+            flush=True
+        )
+
         results = await asyncio.gather(
             *tasks
         )
@@ -1363,7 +1415,7 @@ async def main():
         await browser.close()
 
     # ========================================================
-    # INTÉGRATION DES RÉSULTATS
+    # INTÉGRATION
     # ========================================================
 
     new_releases = 0
@@ -1373,16 +1425,14 @@ async def main():
 
     for result in results:
 
-        status = result["status"]
-
-        if status in {
+        if result["status"] in {
             "today",
             "old",
         }:
 
             successful_artists += 1
 
-        elif status == "error":
+        elif result["status"] == "error":
 
             failed_artists += 1
 
@@ -1390,19 +1440,7 @@ async def main():
             "release"
         )
 
-        # ----------------------------------------------------
-        # IMPORTANT :
-        #
-        # On conserve uniquement les sorties
-        # qui entrent dans la fenêtre existante
-        # de DAYS_TO_SCAN.
-        #
-        # Cela garde le comportement de ton
-        # ancien système.
-        # ----------------------------------------------------
-
         if not release:
-
             continue
 
         release_date = release.get(
@@ -1411,9 +1449,10 @@ async def main():
         )
 
         if not release_date:
-
             continue
 
+        # Compatible avec l'ancienne
+        # fenêtre de 7 jours.
         if release_date < date_days_ago(
             DAYS_TO_SCAN
         ):
@@ -1424,29 +1463,19 @@ async def main():
             release
         )
 
-        # ----------------------------------------------------
-        # NOUVELLE SORTIE
-        # ----------------------------------------------------
-
         if key not in releases_by_key:
 
             new_releases += 1
 
-            print()
-
             print(
-                "NOUVELLE SORTIE : "
+                f"\nNOUVELLE SORTIE : "
                 f"{release['artist_name']} "
                 f"— {release['name']} "
-                f"— {release['release_date']}"
+                f"— {release['release_date']}",
+                flush=True
             )
 
         else:
-
-            # ------------------------------------------------
-            # Complète les données existantes sans les
-            # écraser inutilement.
-            # ------------------------------------------------
 
             old = releases_by_key[key]
 
@@ -1470,10 +1499,37 @@ async def main():
         releases_by_key[key] = release
 
     # ========================================================
+    # SÉCURITÉ
+    # ========================================================
+
+    if successful_artists == 0:
+
+        print()
+        print(
+            "⚠ Aucun artiste n'a été "
+            "vérifié correctement."
+        )
+
+        print(
+            "sorties.json est conservé."
+        )
+
+        total_duration = (
+            time.perf_counter()
+            - start
+        )
+
+        print_final_report(
+            results,
+            total_duration
+        )
+
+        return
+
+    # ========================================================
     # SAUVEGARDE
     # ========================================================
 
-    # Même format que ton système actuel.
     all_releases = list(
         releases_by_key.values()
     )
@@ -1493,40 +1549,8 @@ async def main():
                 ""
             ).lower(),
         ),
-        reverse=True,
+        reverse=True
     )
-
-    # --------------------------------------------------------
-    # Sécurité :
-    #
-    # si Spotify est totalement indisponible,
-    # on NE remplace PAS sorties.json par une liste vide.
-    # --------------------------------------------------------
-
-    if successful_artists == 0:
-
-        print()
-        print(
-            "⚠ Aucun artiste n'a pu être "
-            "vérifié correctement."
-        )
-
-        print(
-            "Le fichier sorties.json "
-            "est conservé tel quel."
-        )
-
-        total_duration = (
-            time.perf_counter()
-            - start
-        )
-
-        print_final_report(
-            results,
-            total_duration
-        )
-
-        return
 
     save_releases(
         all_releases
@@ -1547,25 +1571,14 @@ async def main():
     )
 
     print()
-
     print(
-        f"Sorties totales dans sorties.json : "
+        f"Sorties totales : "
         f"{len(all_releases)}"
     )
 
     print(
-        f"Nouvelles sorties ajoutées : "
+        f"Nouvelles sorties : "
         f"{new_releases}"
-    )
-
-    print(
-        f"Artistes correctement vérifiés : "
-        f"{successful_artists}"
-    )
-
-    print(
-        f"Artistes en erreur : "
-        f"{failed_artists}"
     )
 
     print(
