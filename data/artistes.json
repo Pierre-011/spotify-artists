@@ -12208,5 +12208,645 @@
             "first_seen": "2026-08-21T15:49:47",
             "last_seen": "2026-08-21T15:49:47"
         }
+        "6AgTAQt8XS6jRWi4sX7w49": {
+            "id": "6AgTAQt8XS6jRWi4sX7w49",
+            "name": "Polo G",
+            "url": "https://open.spotify.com/intl-fr/artist/6AgTAQt8XS6jRWi4sX7w49",
+            "uri": "spotify:artist:6AgTAQt8XS6jRWi4sX7w49",
+            "followers": null,
+            "monthly_listeners": 14830655,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/6AgTAQt8XS6jRWi4sX7w49"
+            },
+            "first_seen": "2026-08-21T21:35:41",
+            "last_seen": "2026-08-21T21:38:20"
+        },
+        "1cNDP5yjU5vjeR8qMf4grg": {
+            "id": "1cNDP5yjU5vjeR8qMf4grg",
+            "name": "YNW Melly",
+            "url": "https://open.spotify.com/intl-fr/artist/1cNDP5yjU5vjeR8qMf4grg",
+            "uri": "spotify:artist:1cNDP5yjU5vjeR8qMf4grg",
+            "followers": null,
+            "monthly_listeners": 11447354,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/1cNDP5yjU5vjeR8qMf4grg"
+            },
+            "first_seen": "2026-08-21T21:35:46",
+            "last_seen": "2026-08-21T21:38:23"
+        },
+        "0eDvMgVFoNV3TpwtrVCoTj": {
+            "id": "0eDvMgVFoNV3TpwtrVCoTj",
+            "name": "Pop Smoke",
+            "url": "https://open.spotify.com/intl-fr/artist/0eDvMgVFoNV3TpwtrVCoTj",
+            "uri": "spotify:artist:0eDvMgVFoNV3TpwtrVCoTj",
+            "followers": null,
+            "monthly_listeners": 15176022,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/0eDvMgVFoNV3TpwtrVCoTj"
+            },
+            "first_seen": "2026-08-21T21:35:51",
+            "last_seen": "2026-08-21T21:38:25"
+        },
+        "3hcs9uc56yIGFCSy9leWe7": {
+            "id": "3hcs9uc56yIGFCSy9leWe7",
+            "name": "Lil Durk",
+            "url": "https://open.spotify.com/intl-fr/artist/3hcs9uc56yIGFCSy9leWe7",
+            "uri": "spotify:artist:3hcs9uc56yIGFCSy9leWe7",
+            "followers": null,
+            "monthly_listeners": 19190418,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/3hcs9uc56yIGFCSy9leWe7"
+            },
+            "first_seen": "2026-08-21T21:35:55",
+            "last_seen": "2026-08-21T21:38:28"
+        },
+        "31W5EY0aAly4Qieq6OFu6I": {
+            "id": "31W5EY0aAly4Qieq6OFu6I",
+            "name": "A Boogie Wit da Hoodie",
+            "url": "https://open.spotify.com/intl-fr/artist/31W5EY0aAly4Qieq6OFu6I",
+            "uri": "spotify:artist:31W5EY0aAly4Qieq6OFu6I",
+            "followers": null,
+            "monthly_listeners": 18000264,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/31W5EY0aAly4Qieq6OFu6I"
+            },
+            "first_seen": "2026-08-21T21:36:00",
+            "last_seen": "2026-08-21T21:38:30"
+        },
+        "5f7VJjfbwm532GiveGC0ZK": {
+            "id": "5f7VJjfbwm532GiveGC0ZK",
+            "name": "Lil Baby",
+            "url": "https://open.spotify.com/intl-fr/artist/5f7VJjfbwm532GiveGC0ZK",
+            "uri": "spotify:artist:5f7VJjfbwm532GiveGC0ZK",
+            "followers": null,
+            "monthly_listeners": 31631965,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/5f7VJjfbwm532GiveGC0ZK"
+            },
+            "first_seen": "2026-08-21T21:36:04",
+            "last_seen": "2026-08-21T21:38:33"
+        },
+        "757aE44tKEUQEqRuT6GnEB": {
+            "id": "757aE44tKEUQEqRuT6GnEB",
+            "name": "Roddy Ricch",
+            "url": "https://open.spotify.com/intl-fr/artist/757aE44tKEUQEqRuT6GnEB",
+            "uri": "spotify:artist:757aE44tKEUQEqRuT6GnEB",
+            "followers": null,
+            "monthly_listeners": 19350948,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/757aE44tKEUQEqRuT6GnEB"
+            },
+            "first_seen": "2026-08-21T21:36:09",
+            "last_seen": "2026-08-21T21:38:35"
+        },
+        "0ErzCpIMyLcjPiwT4elrtZ": {
+            "id": "0ErzCpIMyLcjPiwT4elrtZ",
+            "name": "NLE Choppa",
+            "url": "https://open.spotify.com/intl-fr/artist/0ErzCpIMyLcjPiwT4elrtZ",
+            "uri": "spotify:artist:0ErzCpIMyLcjPiwT4elrtZ",
+            "followers": null,
+            "monthly_listeners": 14250204,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/0ErzCpIMyLcjPiwT4elrtZ"
+            },
+            "first_seen": "2026-08-21T21:36:14",
+            "last_seen": "2026-08-21T21:38:38"
+        },
+        "6EPlBSH2RSiettczlz7ihV": {
+            "id": "6EPlBSH2RSiettczlz7ihV",
+            "name": "Sleepy Hallow",
+            "url": "https://open.spotify.com/intl-fr/artist/6EPlBSH2RSiettczlz7ihV",
+            "uri": "spotify:artist:6EPlBSH2RSiettczlz7ihV",
+            "followers": null,
+            "monthly_listeners": 6078421,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/6EPlBSH2RSiettczlz7ihV"
+            },
+            "first_seen": "2026-08-21T21:36:18",
+            "last_seen": "2026-08-21T21:38:40"
+        },
+        "5zctI4wO9XSKS8XwcnqEHk": {
+            "id": "5zctI4wO9XSKS8XwcnqEHk",
+            "name": "Lil Mosey",
+            "url": "https://open.spotify.com/intl-fr/artist/5zctI4wO9XSKS8XwcnqEHk",
+            "uri": "spotify:artist:5zctI4wO9XSKS8XwcnqEHk",
+            "followers": null,
+            "monthly_listeners": 6681530,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/5zctI4wO9XSKS8XwcnqEHk"
+            },
+            "first_seen": "2026-08-21T21:36:22",
+            "last_seen": "2026-08-21T21:38:42"
+        },
+        "6QtgPSJPSzcnn7dPZ4VINp": {
+            "id": "6QtgPSJPSzcnn7dPZ4VINp",
+            "name": "King Von",
+            "url": "https://open.spotify.com/intl-fr/artist/6QtgPSJPSzcnn7dPZ4VINp",
+            "uri": "spotify:artist:6QtgPSJPSzcnn7dPZ4VINp",
+            "followers": null,
+            "monthly_listeners": 10639789,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/6QtgPSJPSzcnn7dPZ4VINp"
+            },
+            "first_seen": "2026-08-21T21:36:27",
+            "last_seen": "2026-08-21T21:38:45"
+        },
+        "4Ga1P7PMIsmqEZqhYZQgDo": {
+            "id": "4Ga1P7PMIsmqEZqhYZQgDo",
+            "name": "Lil Tecca",
+            "url": "https://open.spotify.com/intl-fr/artist/4Ga1P7PMIsmqEZqhYZQgDo",
+            "uri": "spotify:artist:4Ga1P7PMIsmqEZqhYZQgDo",
+            "followers": null,
+            "monthly_listeners": 18489214,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/4Ga1P7PMIsmqEZqhYZQgDo"
+            },
+            "first_seen": "2026-08-21T21:36:31",
+            "last_seen": "2026-08-21T21:38:47"
+        },
+        "4MCBfE4596Uoi2O4DtmEMz": {
+            "id": "4MCBfE4596Uoi2O4DtmEMz",
+            "name": "Juice WRLD",
+            "url": "https://open.spotify.com/intl-fr/artist/4MCBfE4596Uoi2O4DtmEMz",
+            "uri": "spotify:artist:4MCBfE4596Uoi2O4DtmEMz",
+            "followers": null,
+            "monthly_listeners": 29974955,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/4MCBfE4596Uoi2O4DtmEMz"
+            },
+            "first_seen": "2026-08-21T21:36:36",
+            "last_seen": "2026-08-21T21:38:50"
+        },
+        "14CHVeJGrR5xgUGQFV5BVM": {
+            "id": "14CHVeJGrR5xgUGQFV5BVM",
+            "name": "Fivio Foreign",
+            "url": "https://open.spotify.com/intl-fr/artist/14CHVeJGrR5xgUGQFV5BVM",
+            "uri": "spotify:artist:14CHVeJGrR5xgUGQFV5BVM",
+            "followers": null,
+            "monthly_listeners": 3212560,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/14CHVeJGrR5xgUGQFV5BVM"
+            },
+            "first_seen": "2026-08-21T21:36:40",
+            "last_seen": "2026-08-21T21:38:52"
+        },
+        "2hlmm7s2ICUX0LVIhVFlZQ": {
+            "id": "2hlmm7s2ICUX0LVIhVFlZQ",
+            "name": "Gunna",
+            "url": "https://open.spotify.com/intl-fr/artist/2hlmm7s2ICUX0LVIhVFlZQ",
+            "uri": "spotify:artist:2hlmm7s2ICUX0LVIhVFlZQ",
+            "followers": null,
+            "monthly_listeners": 33208479,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/2hlmm7s2ICUX0LVIhVFlZQ"
+            },
+            "first_seen": "2026-08-21T21:36:44",
+            "last_seen": "2026-08-21T21:38:55"
+        },
+        "6MPCFvOQv5cIGfw3jODMF0": {
+            "id": "6MPCFvOQv5cIGfw3jODMF0",
+            "name": "Internet Money",
+            "url": "https://open.spotify.com/intl-fr/artist/6MPCFvOQv5cIGfw3jODMF0",
+            "uri": "spotify:artist:6MPCFvOQv5cIGfw3jODMF0",
+            "followers": null,
+            "monthly_listeners": 7126022,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/6MPCFvOQv5cIGfw3jODMF0"
+            },
+            "first_seen": "2026-08-21T21:36:46",
+            "last_seen": "2026-08-21T21:38:57"
+        },
+        "6i392l38cR3uBPF0DbNs7S": {
+            "id": "6i392l38cR3uBPF0DbNs7S",
+            "name": "Quality Control",
+            "url": "https://open.spotify.com/intl-fr/artist/6i392l38cR3uBPF0DbNs7S",
+            "uri": "spotify:artist:6i392l38cR3uBPF0DbNs7S",
+            "followers": null,
+            "monthly_listeners": 7410935,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/6i392l38cR3uBPF0DbNs7S"
+            },
+            "first_seen": "2026-08-21T21:36:48",
+            "last_seen": "2026-08-21T21:39:00"
+        },
+        "0YinUQ50QDB7ZxSCLyQ40k": {
+            "id": "0YinUQ50QDB7ZxSCLyQ40k",
+            "name": "Mustard",
+            "url": "https://open.spotify.com/intl-fr/artist/0YinUQ50QDB7ZxSCLyQ40k",
+            "uri": "spotify:artist:0YinUQ50QDB7ZxSCLyQ40k",
+            "followers": null,
+            "monthly_listeners": 10277142,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/0YinUQ50QDB7ZxSCLyQ40k"
+            },
+            "first_seen": "2026-08-21T21:36:51",
+            "last_seen": "2026-08-21T21:39:02"
+        },
+        "4r63FhuTkUYltbVAg5TQnk": {
+            "id": "4r63FhuTkUYltbVAg5TQnk",
+            "name": "DaBaby",
+            "url": "https://open.spotify.com/intl-fr/artist/4r63FhuTkUYltbVAg5TQnk",
+            "uri": "spotify:artist:4r63FhuTkUYltbVAg5TQnk",
+            "followers": null,
+            "monthly_listeners": 30658212,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/4r63FhuTkUYltbVAg5TQnk"
+            },
+            "first_seen": "2026-08-21T21:36:53",
+            "last_seen": "2026-08-21T21:39:04"
+        },
+        "5H4yInM5zmHqpKIoMNAx4r": {
+            "id": "5H4yInM5zmHqpKIoMNAx4r",
+            "name": "Central Cee",
+            "url": "https://open.spotify.com/intl-fr/artist/5H4yInM5zmHqpKIoMNAx4r",
+            "uri": "spotify:artist:5H4yInM5zmHqpKIoMNAx4r",
+            "followers": null,
+            "monthly_listeners": 22117695,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/5H4yInM5zmHqpKIoMNAx4r"
+            },
+            "first_seen": "2026-08-21T21:36:56",
+            "last_seen": "2026-08-21T21:39:07"
+        },
+        "1URnnhqYAYcrqrcwql10ft": {
+            "id": "1URnnhqYAYcrqrcwql10ft",
+            "name": "21 Savage",
+            "url": "https://open.spotify.com/intl-fr/artist/1URnnhqYAYcrqrcwql10ft",
+            "uri": "spotify:artist:1URnnhqYAYcrqrcwql10ft",
+            "followers": null,
+            "monthly_listeners": 40768961,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/1URnnhqYAYcrqrcwql10ft"
+            },
+            "first_seen": "2026-08-21T21:36:58",
+            "last_seen": "2026-08-21T21:39:10"
+        },
+        "4DdkRBBYG6Yk9Ka8tdJ9BW": {
+            "id": "4DdkRBBYG6Yk9Ka8tdJ9BW",
+            "name": "Offset",
+            "url": "https://open.spotify.com/intl-fr/artist/4DdkRBBYG6Yk9Ka8tdJ9BW",
+            "uri": "spotify:artist:4DdkRBBYG6Yk9Ka8tdJ9BW",
+            "followers": null,
+            "monthly_listeners": 18334116,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/4DdkRBBYG6Yk9Ka8tdJ9BW"
+            },
+            "first_seen": "2026-08-21T21:37:01",
+            "last_seen": "2026-08-21T21:39:12"
+        },
+        "50co4Is1HCEo8bhOyUWKpn": {
+            "id": "50co4Is1HCEo8bhOyUWKpn",
+            "name": "Young Thug",
+            "url": "https://open.spotify.com/intl-fr/artist/50co4Is1HCEo8bhOyUWKpn",
+            "uri": "spotify:artist:50co4Is1HCEo8bhOyUWKpn",
+            "followers": null,
+            "monthly_listeners": 28619098,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/50co4Is1HCEo8bhOyUWKpn"
+            },
+            "first_seen": "2026-08-21T21:37:03",
+            "last_seen": "2026-08-21T21:39:15"
+        },
+        "4O15NlyKLIASxsJ0PrXPfz": {
+            "id": "4O15NlyKLIASxsJ0PrXPfz",
+            "name": "Lil Uzi Vert",
+            "url": "https://open.spotify.com/intl-fr/artist/4O15NlyKLIASxsJ0PrXPfz",
+            "uri": "spotify:artist:4O15NlyKLIASxsJ0PrXPfz",
+            "followers": null,
+            "monthly_listeners": 30477896,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/4O15NlyKLIASxsJ0PrXPfz"
+            },
+            "first_seen": "2026-08-21T21:37:06",
+            "last_seen": "2026-08-21T21:39:17"
+        },
+        "6Xgp2XMz1fhVYe7i6yNAax": {
+            "id": "6Xgp2XMz1fhVYe7i6yNAax",
+            "name": "Trippie Redd",
+            "url": "https://open.spotify.com/intl-fr/artist/6Xgp2XMz1fhVYe7i6yNAax",
+            "uri": "spotify:artist:6Xgp2XMz1fhVYe7i6yNAax",
+            "followers": null,
+            "monthly_listeners": 24888877,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/6Xgp2XMz1fhVYe7i6yNAax"
+            },
+            "first_seen": "2026-08-21T21:37:08",
+            "last_seen": "2026-08-21T21:39:20"
+        },
+        "3IaKn0ExWTMPqa0mscUYw3": {
+            "id": "3IaKn0ExWTMPqa0mscUYw3",
+            "name": "Only The Family",
+            "url": "https://open.spotify.com/intl-fr/artist/3IaKn0ExWTMPqa0mscUYw3",
+            "uri": "spotify:artist:3IaKn0ExWTMPqa0mscUYw3",
+            "followers": null,
+            "monthly_listeners": 2882755,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/3IaKn0ExWTMPqa0mscUYw3"
+            },
+            "first_seen": "2026-08-21T21:37:11",
+            "last_seen": "2026-08-21T21:39:22"
+        },
+        "46SHBwWsqBkxI7EeeBEQG7": {
+            "id": "46SHBwWsqBkxI7EeeBEQG7",
+            "name": "Kodak Black",
+            "url": "https://open.spotify.com/intl-fr/artist/46SHBwWsqBkxI7EeeBEQG7",
+            "uri": "spotify:artist:46SHBwWsqBkxI7EeeBEQG7",
+            "followers": null,
+            "monthly_listeners": 31077355,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/46SHBwWsqBkxI7EeeBEQG7"
+            },
+            "first_seen": "2026-08-21T21:37:13",
+            "last_seen": "2026-08-21T21:39:25"
+        },
+        "0WK3H9OErSn5zKOkOV5egm": {
+            "id": "0WK3H9OErSn5zKOkOV5egm",
+            "name": "DDG",
+            "url": "https://open.spotify.com/intl-fr/artist/0WK3H9OErSn5zKOkOV5egm",
+            "uri": "spotify:artist:0WK3H9OErSn5zKOkOV5egm",
+            "followers": null,
+            "monthly_listeners": 2500751,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/0WK3H9OErSn5zKOkOV5egm"
+            },
+            "first_seen": "2026-08-21T21:37:15",
+            "last_seen": "2026-08-21T21:39:27"
+        },
+        "1XLWox9w1Yvbodui0SRhUQ": {
+            "id": "1XLWox9w1Yvbodui0SRhUQ",
+            "name": "StaySolidRocky",
+            "url": "https://open.spotify.com/intl-fr/artist/1XLWox9w1Yvbodui0SRhUQ",
+            "uri": "spotify:artist:1XLWox9w1Yvbodui0SRhUQ",
+            "followers": null,
+            "monthly_listeners": 3615841,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/1XLWox9w1Yvbodui0SRhUQ"
+            },
+            "first_seen": "2026-08-21T21:37:18",
+            "last_seen": "2026-08-21T21:39:29"
+        },
+        "7rkW85dBwwrJtlHRDkJDAC": {
+            "id": "7rkW85dBwwrJtlHRDkJDAC",
+            "name": "NAV",
+            "url": "https://open.spotify.com/intl-fr/artist/7rkW85dBwwrJtlHRDkJDAC",
+            "uri": "spotify:artist:7rkW85dBwwrJtlHRDkJDAC",
+            "followers": null,
+            "monthly_listeners": 10298246,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/7rkW85dBwwrJtlHRDkJDAC"
+            },
+            "first_seen": "2026-08-21T21:37:20",
+            "last_seen": "2026-08-21T21:39:32"
+        },
+        "1RyvyyTE3xzB2ZywiAwp0i": {
+            "id": "1RyvyyTE3xzB2ZywiAwp0i",
+            "name": "Future",
+            "url": "https://open.spotify.com/intl-fr/artist/1RyvyyTE3xzB2ZywiAwp0i",
+            "uri": "spotify:artist:1RyvyyTE3xzB2ZywiAwp0i",
+            "followers": null,
+            "monthly_listeners": 52819500,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/1RyvyyTE3xzB2ZywiAwp0i"
+            },
+            "first_seen": "2026-08-21T21:37:23",
+            "last_seen": "2026-08-21T21:39:34"
+        },
+        "24CgJHK6T7C5OmUbiLLMjJ": {
+            "id": "24CgJHK6T7C5OmUbiLLMjJ",
+            "name": "Luh Kel",
+            "url": "https://open.spotify.com/intl-fr/artist/24CgJHK6T7C5OmUbiLLMjJ",
+            "uri": "spotify:artist:24CgJHK6T7C5OmUbiLLMjJ",
+            "followers": null,
+            "monthly_listeners": 1635015,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/24CgJHK6T7C5OmUbiLLMjJ"
+            },
+            "first_seen": "2026-08-21T21:37:25",
+            "last_seen": "2026-08-21T21:39:37"
+        },
+        "6BH1xcDkwbbyrLMUKECsW1": {
+            "id": "6BH1xcDkwbbyrLMUKECsW1",
+            "name": "Toosii",
+            "url": "https://open.spotify.com/intl-fr/artist/6BH1xcDkwbbyrLMUKECsW1",
+            "uri": "spotify:artist:6BH1xcDkwbbyrLMUKECsW1",
+            "followers": null,
+            "monthly_listeners": 3497176,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/6BH1xcDkwbbyrLMUKECsW1"
+            },
+            "first_seen": "2026-08-21T21:37:28",
+            "last_seen": "2026-08-21T21:39:39"
+        },
+        "0Yr4BBpK2dkCp2UsrJ9LZN": {
+            "id": "0Yr4BBpK2dkCp2UsrJ9LZN",
+            "name": "Bankrol Hayden",
+            "url": "https://open.spotify.com/intl-fr/artist/0Yr4BBpK2dkCp2UsrJ9LZN",
+            "uri": "spotify:artist:0Yr4BBpK2dkCp2UsrJ9LZN",
+            "followers": null,
+            "monthly_listeners": 1441680,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/0Yr4BBpK2dkCp2UsrJ9LZN"
+            },
+            "first_seen": "2026-08-21T21:37:30",
+            "last_seen": "2026-08-21T21:39:42"
+        },
+        "3Fl1V19tmjt57oBdxXKAjJ": {
+            "id": "3Fl1V19tmjt57oBdxXKAjJ",
+            "name": "Blueface",
+            "url": "https://open.spotify.com/intl-fr/artist/3Fl1V19tmjt57oBdxXKAjJ",
+            "uri": "spotify:artist:3Fl1V19tmjt57oBdxXKAjJ",
+            "followers": null,
+            "monthly_listeners": 3504322,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/3Fl1V19tmjt57oBdxXKAjJ"
+            },
+            "first_seen": "2026-08-21T21:37:33",
+            "last_seen": "2026-08-21T21:39:44"
+        },
+        "20sxb77xiYeusSH8cVdatc": {
+            "id": "20sxb77xiYeusSH8cVdatc",
+            "name": "Meek Mill",
+            "url": "https://open.spotify.com/intl-fr/artist/20sxb77xiYeusSH8cVdatc",
+            "uri": "spotify:artist:20sxb77xiYeusSH8cVdatc",
+            "followers": null,
+            "monthly_listeners": 15965821,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/20sxb77xiYeusSH8cVdatc"
+            },
+            "first_seen": "2026-08-21T21:37:35",
+            "last_seen": "2026-08-21T21:39:47"
+        },
+        "0QHgL1lAIqAw0HtD7YldmP": {
+            "id": "0QHgL1lAIqAw0HtD7YldmP",
+            "name": "DJ Khaled",
+            "url": "https://open.spotify.com/intl-fr/artist/0QHgL1lAIqAw0HtD7YldmP",
+            "uri": "spotify:artist:0QHgL1lAIqAw0HtD7YldmP",
+            "followers": null,
+            "monthly_listeners": 24261145,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/0QHgL1lAIqAw0HtD7YldmP"
+            },
+            "first_seen": "2026-08-21T21:37:37",
+            "last_seen": "2026-08-21T21:39:49"
+        },
+        "7wlFDEWiM5OoIAt8RSli8b": {
+            "id": "7wlFDEWiM5OoIAt8RSli8b",
+            "name": "YoungBoy Never Broke Again",
+            "url": "https://open.spotify.com/intl-fr/artist/7wlFDEWiM5OoIAt8RSli8b",
+            "uri": "spotify:artist:7wlFDEWiM5OoIAt8RSli8b",
+            "followers": null,
+            "monthly_listeners": 18921255,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/7wlFDEWiM5OoIAt8RSli8b"
+            },
+            "first_seen": "2026-08-21T21:37:40",
+            "last_seen": "2026-08-21T21:39:52"
+        },
+        "0Y5tJX1MQlPlqiwlOH1tJY": {
+            "id": "0Y5tJX1MQlPlqiwlOH1tJY",
+            "name": "Travis Scott",
+            "url": "https://open.spotify.com/intl-fr/artist/0Y5tJX1MQlPlqiwlOH1tJY",
+            "uri": "spotify:artist:0Y5tJX1MQlPlqiwlOH1tJY",
+            "followers": null,
+            "monthly_listeners": 59723339,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/0Y5tJX1MQlPlqiwlOH1tJY"
+            },
+            "first_seen": "2026-08-21T21:37:42",
+            "last_seen": "2026-08-21T21:39:54"
+        },
+        "7scapvSjZLSm0fBgqGM0Mn": {
+            "id": "7scapvSjZLSm0fBgqGM0Mn",
+            "name": "Lil Loaded",
+            "url": "https://open.spotify.com/intl-fr/artist/7scapvSjZLSm0fBgqGM0Mn",
+            "uri": "spotify:artist:7scapvSjZLSm0fBgqGM0Mn",
+            "followers": null,
+            "monthly_listeners": 1565296,
+            "popularity": null,
+            "genres": [],
+            "images": [],
+            "external_urls": {
+                "spotify": "https://open.spotify.com/intl-fr/artist/7scapvSjZLSm0fBgqGM0Mn"
+            },
+            "first_seen": "2026-08-21T21:37:45",
+            "last_seen": "2026-08-21T21:39:56"
+        }
     }
 }
