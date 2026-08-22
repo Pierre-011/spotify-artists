@@ -77,14 +77,11 @@ def parse_spotify_date(text):
     match = re.search(r"\b(\d{1,2})\s+([a-zàâçéèêëîïôûùüÿ]+)\s+(\d{4})\b", text)
     if not match:
         return None
-
     day = int(match.group(1))
     month = MONTHS_FR.get(match.group(2))
     year = int(match.group(3))
-
     if month is None:
         return None
-
     try:
         return datetime(year, month, day).strftime("%Y-%m-%d")
     except ValueError:
@@ -96,9 +93,7 @@ def load_json(path, default):
         return default
     try:
         text = path.read_text(encoding="utf-8").strip()
-        if not text:
-            return default
-        return json.loads(text)
+        return default if not text else json.loads(text)
     except Exception as error:
         print(f"[ERREUR JSON] {path}: {error}", flush=True)
         return default
@@ -282,8 +277,9 @@ async def get_release_name(page):
     return "Sortie inconnue"
 
 
-async def get_exact_release_date(page):
+async def get_exact_release_date(page, expected_year=None):
     print("      → recherche de l'année...", flush=True)
+
     try:
         await page.wait_for_selector(r"text=/\b(19|20)\d{2}\b/", timeout=PAGE_TIMEOUT)
     except PlaywrightTimeoutError:
@@ -302,6 +298,9 @@ async def get_exact_release_date(page):
 
             text = (await element.inner_text()).strip()
             if not re.fullmatch(r"(19|20)\d{2}", text):
+                continue
+
+            if expected_year and text != str(expected_year):
                 continue
 
             print(f"      → hover sur {text}...", flush=True)
@@ -329,30 +328,29 @@ async def get_exact_release_date(page):
                     pass
 
             for candidate in reversed(candidate_texts):
-                matches = re.findall(
+                fr_matches = re.findall(
                     r"\b\d{1,2}\s+(?:janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+\d{4}\b",
                     candidate,
                     flags=re.IGNORECASE,
                 )
-                for date_text in reversed(matches):
-                    result = parse_spotify_date(date_text)
-                    if result:
-                        print(f"      ✓ date exacte : {result}", flush=True)
-                        return result
+                for date_text in reversed(fr_matches):
+                    parsed = parse_spotify_date(date_text)
+                    if parsed:
+                        print(f"      ✓ date exacte : {parsed}", flush=True)
+                        return parsed
 
-                matches_en = re.findall(
+                en_matches = re.findall(
                     r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
                     candidate,
                     flags=re.IGNORECASE,
                 )
-                for date_text in reversed(matches_en):
+                for date_text in reversed(en_matches):
                     try:
-                        parsed = datetime.strptime(date_text, "%B %d, %Y")
-                        result = parsed.strftime("%Y-%m-%d")
-                        print(f"      ✓ date exacte : {result}", flush=True)
-                        return result
+                        parsed = datetime.strptime(date_text, "%B %d, %Y").strftime("%Y-%m-%d")
+                        print(f"      ✓ date exacte : {parsed}", flush=True)
+                        return parsed
                     except ValueError:
-                        pass
+                        continue
 
         except Exception:
             continue
@@ -426,7 +424,8 @@ async def process_artist(context, artist, index, total):
         release_name = await get_release_name(page)
         print(f"      → sortie : {release_name}", flush=True)
 
-        release_date = await get_exact_release_date(page)
+        expected_year = datetime.now().year
+        release_date = await get_exact_release_date(page, expected_year=expected_year)
         if not release_date:
             result["status"] = STATUS_DATE_NOT_FOUND
             result["reason"] = "La sortie a été trouvée, mais la date exacte Spotify n'a pas été récupérée."
@@ -443,17 +442,11 @@ async def process_artist(context, artist, index, total):
 
         if release_date == today():
             result["status"] = STATUS_TODAY
-            result["reason"] = (
-                f"La dernière sortie Spotify est datée exactement du {release_date}, "
-                f"qui correspond à la date du jour."
-            )
+            result["reason"] = f"La dernière sortie Spotify est datée exactement du {release_date}, qui correspond à la date du jour."
             print("    ★ SORTIE DU JOUR", flush=True)
         else:
             result["status"] = STATUS_OLD
-            result["reason"] = (
-                f"La dernière sortie Spotify est datée du {release_date}, "
-                f"donc ce n'est pas une sortie du jour."
-            )
+            result["reason"] = f"La dernière sortie Spotify est datée du {release_date}, donc ce n'est pas une sortie du jour."
             print(f"    ✓ aucune sortie aujourd'hui ({release_date})", flush=True)
 
         return result
