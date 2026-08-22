@@ -15,7 +15,7 @@ RELEASES_FILE = Path("data/sorties.json")
 SPOTIFY_ARTIST_URL = "https://open.spotify.com/artist/{}"
 SPOTIFY_BASE = "https://open.spotify.com"
 
-CONCURRENCY = 5
+CONCURRENCY = 8
 HEADLESS = True
 PAGE_TIMEOUT = 12_000
 TOOLTIP_WAIT = 250
