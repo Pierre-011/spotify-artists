@@ -342,6 +342,22 @@ async def route_handler(route):
 
 
 # ============================================================
+# STATUTS
+# ============================================================
+
+STATUS_TODAY = "today"
+STATUS_OLD = "old"
+
+STATUS_NO_RELEASE = "no_release"
+STATUS_DATE_NOT_FOUND = "date_not_found"
+
+STATUS_TIMEOUT_ARTIST = "timeout_artist"
+STATUS_TIMEOUT_RELEASE = "timeout_release"
+STATUS_ERROR_ARTIST = "error_artist"
+STATUS_ERROR_RELEASE = "error_release"
+
+
+# ============================================================
 # DERNIÈRE SORTIE
 # ============================================================
 
@@ -457,33 +473,36 @@ async def get_release_name(
 # DATE EXACTE
 # ============================================================
 
-async def get_exact_release_date(
-    page
-):
+async def get_exact_release_date(page):
+    """
+    Spotify affiche la date exacte dans un tooltip après survol de l'année.
+
+    Stratégie :
+    1. Trouver les années visibles.
+    2. Survoler chaque année.
+    3. Lire uniquement le texte de la page après le survol.
+    4. Chercher une date française ou anglaise.
+
+    On conserve volontairement le hover : c'est nécessaire pour
+    récupérer la date exacte sur Spotify.
+    """
 
     print(
         "      → recherche de l'année...",
         flush=True
     )
 
-    # --------------------------------------------------------
-    # On cherche directement les années visibles.
-    # --------------------------------------------------------
-
     try:
-
         await page.wait_for_selector(
             "text=/\\b(19|20)\\d{2}\\b/",
             timeout=PAGE_TIMEOUT
         )
 
     except PlaywrightTimeoutError:
-
         print(
             "      ✗ année introuvable",
             flush=True
         )
-
         return None
 
     years = page.locator(
@@ -493,28 +512,22 @@ async def get_exact_release_date(
     count = await years.count()
 
     print(
-        f"      → {count} élément(s) contenant "
-        f"une année trouvé(s)",
+        f"      → {count} élément(s) contenant une année trouvé(s)",
         flush=True
     )
 
-    for i in range(count):
-
+    # On parcourt les années de la dernière vers la première.
+    # Les éléments déjà présents dans le DOM sont réutilisés.
+    for i in range(count - 1, -1, -1):
         element = years.nth(i)
 
         try:
-
             if not await element.is_visible():
                 continue
 
-            text = (
-                await element.inner_text()
-            ).strip()
+            text = (await element.inner_text()).strip()
 
-            if not re.fullmatch(
-                r"(19|20)\d{2}",
-                text
-            ):
+            if not re.fullmatch(r"(19|20)\d{2}", text):
                 continue
 
             print(
@@ -522,115 +535,112 @@ async def get_exact_release_date(
                 flush=True
             )
 
-            # ------------------------------------------------
-            # SURVOL
-            # ------------------------------------------------
+            await element.hover(timeout=3_000)
 
-            await element.hover(
-                timeout=3_000
-            )
+            # Attente courte mais ciblée : on laisse le tooltip apparaître
+            # sans imposer une longue attente fixe.
+            await page.wait_for_timeout(TOOLTIP_WAIT)
 
-            await page.wait_for_timeout(
-                TOOLTIP_WAIT
-            )
+            # Le tooltip peut être rendu dans un élément séparé du contenu
+            # principal. On récupère d'abord les textes courts susceptibles
+            # de contenir une date, puis on utilise le body en dernier recours.
+            candidate_texts = []
 
-            # ------------------------------------------------
-            # RÉCUPÉRATION DU BODY
-            # ------------------------------------------------
+            # Les éléments role=tooltip sont privilégiés.
+            tooltips = page.locator('[role="tooltip"]')
+            tooltip_count = await tooltips.count()
 
-            body_text = (
-                await page.locator(
-                    "body"
-                ).inner_text()
-            )
-
-            # ------------------------------------------------
-            # DATES FRANÇAISES
-            # ------------------------------------------------
-
-            matches = re.findall(
-                r"\b"
-                r"\d{1,2}"
-                r"\s+"
-                r"(?:janvier|février|fevrier|mars|"
-                r"avril|mai|juin|juillet|août|aout|"
-                r"septembre|octobre|novembre|"
-                r"décembre|decembre)"
-                r"\s+"
-                r"\d{4}"
-                r"\b",
-                body_text,
-                flags=re.IGNORECASE
-            )
-
-            for date_text in reversed(
-                matches
-            ):
-
-                result = parse_spotify_date(
-                    date_text
-                )
-
-                if result:
-
-                    print(
-                        f"      ✓ date exacte : "
-                        f"{result}",
-                        flush=True
-                    )
-
-                    return result
-
-            # ------------------------------------------------
-            # DATES ANGLAISES
-            # ------------------------------------------------
-
-            matches_en = re.findall(
-                r"\b"
-                r"(?:January|February|March|April|"
-                r"May|June|July|August|September|"
-                r"October|November|December)"
-                r"\s+"
-                r"\d{1,2}"
-                r",\s+"
-                r"\d{4}"
-                r"\b",
-                body_text,
-                flags=re.IGNORECASE
-            )
-
-            for date_text in reversed(
-                matches_en
-            ):
+            for j in range(tooltip_count):
+                tooltip = tooltips.nth(j)
 
                 try:
+                    if await tooltip.is_visible():
+                        tooltip_text = (await tooltip.inner_text()).strip()
+                        if tooltip_text:
+                            candidate_texts.append(tooltip_text)
+                except Exception:
+                    continue
 
-                    parsed = datetime.strptime(
-                        date_text,
-                        "%B %d, %Y"
-                    )
-
-                    result = parsed.strftime(
-                        "%Y-%m-%d"
-                    )
-
-                    print(
-                        f"      ✓ date exacte : "
-                        f"{result}",
-                        flush=True
-                    )
-
-                    return result
-
-                except ValueError:
+            # Fallback : le texte visible de la page.
+            # On ne lit le body qu'une seule fois pour cet élément.
+            if not candidate_texts:
+                try:
+                    body_text = await page.locator("body").inner_text()
+                    candidate_texts.append(body_text)
+                except Exception:
                     pass
 
-        except PlaywrightTimeoutError:
+            for candidate in reversed(candidate_texts):
 
+                # --------------------------------------------------------
+                # DATES FRANÇAISES
+                # --------------------------------------------------------
+
+                matches = re.findall(
+                    r"\b"
+                    r"\d{1,2}"
+                    r"\s+"
+                    r"(?:janvier|février|fevrier|mars|"
+                    r"avril|mai|juin|juillet|août|aout|"
+                    r"septembre|octobre|novembre|"
+                    r"décembre|decembre)"
+                    r"\s+"
+                    r"\d{4}"
+                    r"\b",
+                    candidate,
+                    flags=re.IGNORECASE
+                )
+
+                for date_text in reversed(matches):
+                    result = parse_spotify_date(date_text)
+
+                    if result:
+                        print(
+                            f"      ✓ date exacte : {result}",
+                            flush=True
+                        )
+                        return result
+
+                # --------------------------------------------------------
+                # DATES ANGLAISES
+                # --------------------------------------------------------
+
+                matches_en = re.findall(
+                    r"\b"
+                    r"(?:January|February|March|April|"
+                    r"May|June|July|August|September|"
+                    r"October|November|December)"
+                    r"\s+"
+                    r"\d{1,2}"
+                    r",\s+"
+                    r"\d{4}"
+                    r"\b",
+                    candidate,
+                    flags=re.IGNORECASE
+                )
+
+                for date_text in reversed(matches_en):
+                    try:
+                        parsed = datetime.strptime(
+                            date_text,
+                            "%B %d, %Y"
+                        )
+
+                        result = parsed.strftime("%Y-%m-%d")
+
+                        print(
+                            f"      ✓ date exacte : {result}",
+                            flush=True
+                        )
+                        return result
+
+                    except ValueError:
+                        pass
+
+        except PlaywrightTimeoutError:
             continue
 
         except Exception:
-
             continue
 
     print(
@@ -745,7 +755,6 @@ async def process_artist(
     index,
     total
 ):
-
     start = time.perf_counter()
 
     artist_name = artist.get(
@@ -777,10 +786,8 @@ async def process_artist(
     }
 
     if not artist_id:
-
-        result["reason"] = (
-            "ID Spotify absent."
-        )
+        result["status"] = STATUS_ERROR_ARTIST
+        result["reason"] = "ID Spotify absent."
 
         print(
             f"    ✗ {result['reason']}",
@@ -792,17 +799,14 @@ async def process_artist(
     page = None
 
     try:
-
         # ----------------------------------------------------
-        # PAGE
+        # PAGE ARTISTE
         # ----------------------------------------------------
 
         page = await context.new_page()
 
-        artist_url = (
-            SPOTIFY_ARTIST_URL.format(
-                artist_id
-            )
+        artist_url = SPOTIFY_ARTIST_URL.format(
+            artist_id
         )
 
         print(
@@ -810,11 +814,22 @@ async def process_artist(
             flush=True
         )
 
-        await page.goto(
-            artist_url,
-            wait_until="domcontentloaded",
-            timeout=PAGE_TIMEOUT
-        )
+        try:
+            await page.goto(
+                artist_url,
+                wait_until="domcontentloaded",
+                timeout=PAGE_TIMEOUT
+            )
+        except PlaywrightTimeoutError:
+            result["status"] = STATUS_TIMEOUT_ARTIST
+            result["reason"] = "Timeout lors du chargement de la page artiste."
+
+            print(
+                f"    ✗ {result['reason']}",
+                flush=True
+            )
+
+            return result
 
         print(
             "    ✓ page artiste chargée",
@@ -825,19 +840,12 @@ async def process_artist(
         # DERNIÈRE SORTIE
         # ----------------------------------------------------
 
-        release_url = (
-            await find_latest_release(
-                page
-            )
-        )
+        release_url = await find_latest_release(page)
 
         if not release_url:
-
-            result["status"] = "unknown"
-
+            result["status"] = STATUS_NO_RELEASE
             result["reason"] = (
-                "Aucune dernière sortie "
-                "détectée."
+                "Aucune sortie Spotify détectée."
             )
 
             return result
@@ -851,11 +859,24 @@ async def process_artist(
             flush=True
         )
 
-        await page.goto(
-            release_url,
-            wait_until="domcontentloaded",
-            timeout=PAGE_TIMEOUT
-        )
+        try:
+            await page.goto(
+                release_url,
+                wait_until="domcontentloaded",
+                timeout=PAGE_TIMEOUT
+            )
+        except PlaywrightTimeoutError:
+            result["status"] = STATUS_TIMEOUT_RELEASE
+            result["reason"] = (
+                "Timeout lors du chargement de la page de sortie."
+            )
+
+            print(
+                f"      ✗ {result['reason']}",
+                flush=True
+            )
+
+            return result
 
         print(
             "      ✓ page sortie chargée",
@@ -866,15 +887,10 @@ async def process_artist(
         # NOM
         # ----------------------------------------------------
 
-        release_name = (
-            await get_release_name(
-                page
-            )
-        )
+        release_name = await get_release_name(page)
 
         print(
-            f"      → sortie : "
-            f"{release_name}",
+            f"      → sortie : {release_name}",
             flush=True
         )
 
@@ -882,16 +898,10 @@ async def process_artist(
         # DATE EXACTE
         # ----------------------------------------------------
 
-        release_date = (
-            await get_exact_release_date(
-                page
-            )
-        )
+        release_date = await get_exact_release_date(page)
 
         if not release_date:
-
-            result["status"] = "unknown"
-
+            result["status"] = STATUS_DATE_NOT_FOUND
             result["reason"] = (
                 "La sortie a été trouvée, "
                 "mais la date exacte Spotify "
@@ -918,13 +928,11 @@ async def process_artist(
         # ----------------------------------------------------
 
         if release_date == today():
-
-            result["status"] = "today"
+            result["status"] = STATUS_TODAY
 
             result["reason"] = (
-                f"La dernière sortie Spotify "
-                f"est datée exactement du "
-                f"{release_date}, qui correspond "
+                f"La dernière sortie Spotify est datée "
+                f"exactement du {release_date}, qui correspond "
                 f"à la date du jour."
             )
 
@@ -934,46 +942,23 @@ async def process_artist(
             )
 
         else:
-
-            result["status"] = "old"
+            result["status"] = STATUS_OLD
 
             result["reason"] = (
-                f"La dernière sortie Spotify "
-                f"est datée du "
-                f"{release_date}, donc ce n'est "
-                f"pas une sortie du jour."
+                f"La dernière sortie Spotify est datée du "
+                f"{release_date}, donc ce n'est pas une sortie du jour."
             )
 
             print(
-                f"    ✓ aucune sortie aujourd'hui "
-                f"({release_date})",
+                f"    ✓ aucune sortie aujourd'hui ({release_date})",
                 flush=True
             )
 
         return result
 
-    except PlaywrightTimeoutError:
-
-        result["status"] = "error"
-
-        result["reason"] = (
-            "Timeout Spotify/Playwright."
-        )
-
-        print(
-            f"    ✗ {result['reason']}",
-            flush=True
-        )
-
-        return result
-
     except Exception as error:
-
-        result["status"] = "error"
-
-        result["reason"] = (
-            f"Erreur : {error}"
-        )
+        result["status"] = STATUS_ERROR_ARTIST
+        result["reason"] = f"Erreur : {error}"
 
         print(
             f"    ✗ {result['reason']}",
@@ -983,22 +968,19 @@ async def process_artist(
         return result
 
     finally:
-
         result["duration"] = (
             time.perf_counter()
             - start
         )
 
         if page:
-
             try:
                 await page.close()
             except Exception:
                 pass
 
         print(
-            f"    Temps : "
-            f"{result['duration']:.2f}s",
+            f"    Temps : {result['duration']:.2f}s",
             flush=True
         )
 
@@ -1073,22 +1055,40 @@ def print_final_report(
 
     today_results = [
         r for r in results
-        if r["status"] == "today"
+        if r["status"] == STATUS_TODAY
     ]
 
     old_results = [
         r for r in results
-        if r["status"] == "old"
+        if r["status"] == STATUS_OLD
     ]
 
-    unknown_results = [
+    no_release_results = [
         r for r in results
-        if r["status"] == "unknown"
+        if r["status"] == STATUS_NO_RELEASE
+    ]
+
+    date_not_found_results = [
+        r for r in results
+        if r["status"] == STATUS_DATE_NOT_FOUND
+    ]
+
+    timeout_artist_results = [
+        r for r in results
+        if r["status"] == STATUS_TIMEOUT_ARTIST
+    ]
+
+    timeout_release_results = [
+        r for r in results
+        if r["status"] == STATUS_TIMEOUT_RELEASE
     ]
 
     error_results = [
         r for r in results
-        if r["status"] == "error"
+        if r["status"] in {
+            STATUS_ERROR_ARTIST,
+            STATUS_ERROR_RELEASE,
+        }
     ]
 
     print()
@@ -1116,8 +1116,23 @@ def print_final_report(
     )
 
     print(
-        f"Impossible à vérifier  : "
-        f"{len(unknown_results)}"
+        f"Sortie introuvable      : "
+        f"{len(no_release_results)}"
+    )
+
+    print(
+        f"Date introuvable        : "
+        f"{len(date_not_found_results)}"
+    )
+
+    print(
+        f"Timeout page artiste    : "
+        f"{len(timeout_artist_results)}"
+    )
+
+    print(
+        f"Timeout page sortie     : "
+        f"{len(timeout_release_results)}"
     )
 
     print(
@@ -1184,24 +1199,31 @@ def print_final_report(
             )
 
     # --------------------------------------------------------
-    # IMPOSSIBLES À VÉRIFIER
+    # PROBLÈMES DE VÉRIFICATION
     # --------------------------------------------------------
 
-    if unknown_results:
+    problem_groups = [
+        ("SORTIES INTROUVABLES", no_release_results),
+        ("DATES INTROUVABLES", date_not_found_results),
+        ("TIMEOUTS PAGE ARTISTE", timeout_artist_results),
+        ("TIMEOUTS PAGE SORTIE", timeout_release_results),
+    ]
+
+    for title, group in problem_groups:
+        if not group:
+            continue
 
         print()
         print("=" * 70)
         print(
-            "                    À VÉRIFIER"
+            f"                    {title}"
         )
         print("=" * 70)
 
-        for result in unknown_results:
-
+        for result in group:
             artist = result["artist"]
 
             print()
-
             print(
                 f"⚠ {artist.get('name', 'Inconnu')}"
             )
@@ -1353,7 +1375,7 @@ async def main():
         )
 
         browser = await p.chromium.launch(
-            headless=True
+            headless=HEADLESS
         )
 
         context = await browser.new_context(
@@ -1426,8 +1448,8 @@ async def main():
     for result in results:
 
         if result["status"] in {
-            "today",
-            "old",
+            STATUS_TODAY,
+            STATUS_OLD,
         }:
 
             successful_artists += 1
