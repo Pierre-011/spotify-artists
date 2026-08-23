@@ -23,6 +23,28 @@
       "url": "https://open.spotify.com/intl-fr/album/1Hf4Ej1Qbot9KMnMydIXFJ"
     },
     {
+      "id": "2oYoXXkhSEbuWug726mQAw",
+      "name": "UNRELEASED! - EP par Hima | Spotify",
+      "artist_name": "Hima",
+      "artist_id": "5FSl15vh72QEslckBWz56R",
+      "album_name": "UNRELEASED! - EP par Hima | Spotify",
+      "release_type": "album",
+      "release_date": "2026-08-22",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/2oYoXXkhSEbuWug726mQAw"
+    },
+    {
+      "id": "3bJTDg38KD6wRkvg55qgpA",
+      "name": "DEMAIN C'EST LOIN - Sencillo par ENiMA AI | Spotify",
+      "artist_name": "ENiMA AI",
+      "artist_id": "21XsJYZlFslgA2FthU0R1x",
+      "album_name": "DEMAIN C'EST LOIN - Sencillo par ENiMA AI | Spotify",
+      "release_type": "album",
+      "release_date": "2026-08-22",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/3bJTDg38KD6wRkvg55qgpA"
+    },
+    {
       "id": "32JuJHtU0WdZKhBLavdIwk",
       "name": "On my mind (Acoustic Version) - Sencillo par Yamê | Spotify",
       "artist_name": "Yamê",
@@ -188,6 +210,17 @@
       "url": "https://open.spotify.com/intl-fr/album/4WiuExD5UzzB5P5UwnU5V6"
     },
     {
+      "id": "35hnr06kHziZWYDBAaQCha",
+      "name": "Under The Karri Tree - Single par Art Papan | Spotify",
+      "artist_name": "Art Papan",
+      "artist_id": "67kOSVe8apCM790dfK7nMO",
+      "album_name": "Under The Karri Tree - Single par Art Papan | Spotify",
+      "release_type": "album",
+      "release_date": "2026-08-21",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/35hnr06kHziZWYDBAaQCha"
+    },
+    {
       "id": "test-005",
       "name": "Tomorrow",
       "artist_name": "Yamê",
@@ -208,6 +241,17 @@
       "release_date": "2026-08-20",
       "album_image": "",
       "url": "https://open.spotify.com/intl-fr/album/3OiWdBj3nZ0YF5uroR0hPo"
+    },
+    {
+      "id": "3VTBR0KWNSg4JHsxHDh6hZ",
+      "name": "Miséricorde - Sencillo par SÖZE | Spotify",
+      "artist_name": "SÖZE",
+      "artist_id": "5yxZ7AdWNDR80AQa1VKyDk",
+      "album_name": "Miséricorde - Sencillo par SÖZE | Spotify",
+      "release_type": "album",
+      "release_date": "2026-08-20",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/3VTBR0KWNSg4JHsxHDh6hZ"
     },
     {
       "id": "3TCZ2YMzZ5w61K4z3bQ6Jn",
