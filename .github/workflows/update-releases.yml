@@ -2,8 +2,12 @@ name: Mise à jour des sorties
 
 on:
   schedule:
-    - cron: "0 * * * *"
-
+    - cron: "30 0 * * *"
+      timezone: "Europe/Paris"
+    - cron: "30 0 * * *"
+      timezone: "Europe/London"
+    - cron: "30 0 * * *"
+      timezone: "America/New_York"
   workflow_dispatch:
 
 permissions:
@@ -35,7 +39,7 @@ jobs:
       - name: Vérifier les modifications
         id: changes
         run: |
-          if git diff --quiet; then
+          if git diff --quiet -- data/sorties.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -46,9 +50,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add data/sorties.json
-
           git commit -m "Mise à jour des sorties"
-
           git push
