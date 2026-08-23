@@ -1,6 +1,28 @@
 {
   "tracks": [
     {
+      "id": "33UQRtSW92SYeSkRKQLqqn",
+      "name": "One life - Single par Mael Say | Spotify",
+      "artist_name": "Mael Say",
+      "artist_id": "0UKPLo8Zg96pnTUIO3qt9J",
+      "album_name": "One life - Single par Mael Say | Spotify",
+      "release_type": "album",
+      "release_date": "2026-08-23",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/33UQRtSW92SYeSkRKQLqqn"
+    },
+    {
+      "id": "6rwcPolN3qe2trq6OPuhrV",
+      "name": "Note 35 : 16eme - Sencillo par Klem Schen | Spotify",
+      "artist_name": "Klem Schen",
+      "artist_id": "2h5IzYxNFBtXa3PsnV370c",
+      "album_name": "Note 35 : 16eme - Sencillo par Klem Schen | Spotify",
+      "release_type": "album",
+      "release_date": "2026-08-23",
+      "album_image": "",
+      "url": "https://open.spotify.com/intl-fr/album/6rwcPolN3qe2trq6OPuhrV"
+    },
+    {
       "id": "6p2igWHgi9DAoFjsaN741m",
       "name": "Note 34 : Souffrance - Single par Klem Schen | Spotify",
       "artist_name": "Klem Schen",
