@@ -23,11 +23,11 @@ SPOTIFY_HEADERS = {
 
 def base_path() -> Path:
     """
-    Retourne le dossier de base du projet.
-    Le script est dans scripts/update_releases.py, on remonte de deux niveaux.
+    Retourne la racine du dépôt.
+    Dans GitHub Actions, le repo est cloné dans $GITHUB_WORKSPACE.
+    Le script est exécuté depuis la racine du repo (working directory par défaut).
     """
-    current = Path(__file__).resolve()
-    return current.parent.parent  # .../
+    return Path.cwd()
 
 
 def flush_print(*args, **kwargs):
@@ -42,25 +42,76 @@ def load_artists(path: str = "data/artistes.json") -> List[Dict[str, Any]]:
     base = base_path()
     full_path = base / path
 
+    flush_print(f"[INFO] Working directory : {Path.cwd()}")
+    flush_print(f"[INFO] Chemin de base du projet : {base}")
     flush_print(f"[INFO] Chargement des artistes depuis : {full_path}")
+    flush_print(f"[INFO] full_path.absolute() = {full_path.absolute()}")
+
+    if not full_path.exists():
+        flush_print(f"[ERREUR] Le fichier {full_path} n'existe pas !")
+        # Liste les fichiers dans data/ pour déboguer
+        data_dir = base / "data"
+        if data_dir.exists():
+            flush_print(f"[DEBUG] Contenu de data/ :")
+            for p in data_dir.iterdir():
+                flush_print(f"  - {p.name}")
+        else:
+            flush_print(f"[DEBUG] Le dossier data/ n'existe pas à la racine.")
+        raise FileNotFoundError(f"Le fichier {full_path} n'existe pas")
 
     with open(full_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+        raw_text = f.read()
+
+    flush_print("[INFO] Contenu brut de artistes.json (premiers 500 caractères) :")
+    flush_print(raw_text[:500])
+    flush_print("...")
+
+    try:
+        data = json.loads(raw_text)
+    except Exception as e:
+        flush_print(f"[ERREUR] JSON invalide : {e}")
+        raise
+
+    flush_print(f"[INFO] Type de la structure JSON : {type(data)}")
 
     if isinstance(data, dict):
+        flush_print(f"[INFO] JSON est un dict avec {len(data)} clés")
         artists = []
         for key, value in data.items():
-            if isinstance(value, dict) and "url" in value:
-                artists.append(value)
-        flush_print(f"[INFO] {len(artists)} artistes trouvés dans artistes.json")
-        return artists
+            flush_print(f"[DEBUG] Clé artiste : {key} -> type(value)={type(value)}")
+            if isinstance(value, dict):
+                if "url" in value:
+                    artists.append(value)
+                    flush_print(f"[DEBUG]   => Ajouté (url trouvée)")
+                else:
+                    flush_print(f"[DEBUG]   => Ignoré (pas de clé 'url')")
+            else:
+                flush_print(f"[DEBUG]   => Ignoré (value n'est pas un dict)")
+
+        flush_print(f"[INFO] {len(artists)} artistes trouvés dans artistes.json (cas dict)")
+        if artists:
+            return artists
 
     if isinstance(data, list):
-        artists = [x for x in data if isinstance(x, dict) and "url" in x]
-        flush_print(f"[INFO] {len(artists)} artistes trouvés dans artistes.json")
-        return artists
+        flush_print(f"[INFO] JSON est une liste avec {len(data)} éléments")
+        artists = []
+        for i, item in enumerate(data):
+            flush_print(f"[DEBUG] Élément {i} : type={type(item)}")
+            if isinstance(item, dict) and "url" in item:
+                artists.append(item)
+                flush_print(f"[DEBUG]   => Ajouté (url trouvée)")
+            else:
+                flush_print(f"[DEBUG]   => Ignoré")
 
-    raise ValueError("Format artistes.json non supporté.")
+        flush_print(f"[INFO] {len(artists)} artistes trouvés dans artistes.json (cas liste)")
+        if artists:
+            return artists
+
+    flush_print("[ERREUR] Aucun artiste trouvé dans artistes.json")
+    flush_print(f"[DEBUG] Structure complète (dump JSON, 1000 premiers caractères) :")
+    flush_print(json.dumps(data, ensure_ascii=False, indent=2)[:1000])
+
+    raise ValueError("Format artistes.json non supporté ou aucun artiste valide trouvé.")
 
 
 def get_last_release_from_spotify(artist_url: str) -> Optional[Dict[str, Any]]:
@@ -138,7 +189,7 @@ def get_last_release_from_spotify(artist_url: str) -> Optional[Dict[str, Any]]:
     else:
         flush_print(f"[SPOTIFY] Artistes du projet : {artists}")
 
-    # URL et ID de l’album
+    # URL et ID de l'album
     album_url = ""
     album_id = ""
     for a in last_release_section.find_all("a", href=True):
@@ -268,6 +319,7 @@ def load_sorties(path: str = "data/sorties.json") -> Dict[str, List[Dict[str, An
     full_path = base / path
 
     flush_print(f"[INFO] Chargement de sorties.json depuis : {full_path}")
+    flush_print(f"[INFO] full_path.absolute() = {full_path.absolute()}")
 
     if not full_path.exists():
         flush_print("[INFO] sorties.json n'existe pas encore, création d'une structure vide")
