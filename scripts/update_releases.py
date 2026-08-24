@@ -1,6 +1,8 @@
 import json
 import re
 import sys
+import time
+import random
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -23,6 +25,8 @@ SPOTIFY_USER_AGENT = (
     "(KHTML, like Gecko) "
     "Chrome/131.0.0.0 Safari/537.36"
 )
+
+TARGET_YEAR = 2026
 
 ENGLISH_MONTHS = {
     "january": 1,
@@ -53,41 +57,23 @@ ENGLISH_MONTHS = {
 
 
 def log(message: str) -> None:
-    """Affiche immédiatement les messages dans GitHub Actions."""
     print(message, flush=True)
 
 
 def normalize_url(value: Any) -> str:
-    """
-    Convertit une URL Markdown éventuelle en URL normale.
-
-    Exemple :
-    [https://open.spotify.com/artist/ABC](https://open.spotify.com/artist/ABC)
-    devient :
-    https://open.spotify.com/artist/ABC
-    """
     if not isinstance(value, str):
         return ""
-
     value = value.strip()
-
-    markdown_match = re.fullmatch(
-        r"\[([^\]]+)\]\((https?://[^)]+)\)",
-        value,
-    )
-
+    markdown_match = re.fullmatch(r"\[([^\]]+)\]\((https?://[^)]+)\)", value)
     if markdown_match:
         value = markdown_match.group(2).strip()
-
     if value.startswith("<") and value.endswith(">"):
         value = value[1:-1].strip()
-
     return value
 
 
 def is_spotify_artist_url(url: str) -> bool:
     parsed = urlparse(url)
-
     return (
         parsed.scheme in {"http", "https"}
         and "open.spotify.com" in parsed.netloc
@@ -96,27 +82,18 @@ def is_spotify_artist_url(url: str) -> bool:
 
 
 def get_spotify_id(url: str, item_type: str) -> str:
-    match = re.search(
-        rf"/{item_type}/([A-Za-z0-9]+)",
-        url,
-    )
-
+    match = re.search(rf"/{item_type}/([A-Za-z0-9]+)", url)
     return match.group(1) if match else ""
 
 
 def build_discography_url(artist_url: str) -> str:
-    """
-    Ajoute /discography/all à l'URL du profil artiste.
-    """
     clean_url = normalize_url(artist_url).rstrip("/")
-
     clean_url = re.sub(
         r"/discography/(all|albums|singles|compilations|appears-on)$",
         "",
         clean_url,
         flags=re.IGNORECASE,
     )
-
     return f"{clean_url}/discography/all"
 
 
@@ -125,24 +102,17 @@ def load_artists() -> List[Dict[str, Any]]:
     log(f"[INFO] Lecture de : {ARTISTS_FILE}")
 
     if not ARTISTS_FILE.exists():
-        raise FileNotFoundError(
-            f"Fichier introuvable : {ARTISTS_FILE}"
-        )
+        raise FileNotFoundError(f"Fichier introuvable : {ARTISTS_FILE}")
 
     with ARTISTS_FILE.open("r", encoding="utf-8") as file:
         data = json.load(file)
 
     if not isinstance(data, dict):
-        raise ValueError(
-            "artistes.json doit contenir un objet JSON."
-        )
+        raise ValueError("artistes.json doit contenir un objet JSON.")
 
     artists_container = data.get("artists")
-
     if not isinstance(artists_container, dict):
-        raise ValueError(
-            "La clé 'artists' est absente ou incorrecte."
-        )
+        raise ValueError("La clé 'artists' est absente ou incorrecte.")
 
     artists: List[Dict[str, Any]] = []
 
@@ -150,34 +120,20 @@ def load_artists() -> List[Dict[str, Any]]:
         if not isinstance(artist_data, dict):
             continue
 
-        artist_url = normalize_url(
-            artist_data.get("url", "")
-        )
-
+        artist_url = normalize_url(artist_data.get("url", ""))
         if not is_spotify_artist_url(artist_url):
-            log(
-                f"[WARN] URL invalide pour "
-                f"{artist_data.get('name', artist_id)}"
-            )
+            log(f"[WARN] URL invalide pour {artist_data.get('name', artist_id)}")
             continue
 
         artist = dict(artist_data)
         artist["id"] = artist_data.get("id") or artist_id
-        artist["name"] = artist_data.get(
-            "name",
-            "Artiste inconnu",
-        )
+        artist["name"] = artist_data.get("name", "Artiste inconnu")
         artist["url"] = artist_url
-
         artists.append(artist)
 
     log(f"[INFO] {len(artists)} artistes chargés.")
-
     if not artists:
-        raise ValueError(
-            "Aucun artiste valide trouvé dans artistes.json."
-        )
-
+        raise ValueError("Aucun artiste valide trouvé dans artistes.json.")
     return artists
 
 
@@ -196,33 +152,19 @@ def load_releases() -> Dict[str, Any]:
     if not isinstance(data.get("tracks"), list):
         data["tracks"] = []
 
-    log(
-        f"[INFO] {len(data['tracks'])} sortie(s) déjà enregistrée(s)."
-    )
-
+    log(f"[INFO] {len(data['tracks'])} sortie(s) déjà enregistrée(s).")
     return data
 
 
 def save_releases(data: Dict[str, Any]) -> None:
     with RELEASES_FILE.open("w", encoding="utf-8") as file:
-        json.dump(
-            data,
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
+        json.dump(data, file, ensure_ascii=False, indent=2)
         file.write("\n")
-
     log(f"[INFO] Fichier sauvegardé : {RELEASES_FILE}")
 
 
 def extract_album_links(page) -> List[str]:
-    """
-    Récupère les liens de projets dans l'ordre d'apparition
-    dans le DOM rendu de Spotify.
-    """
     links: List[str] = []
-
     anchors = page.locator("a[href*='/album/']")
     count = anchors.count()
 
@@ -236,24 +178,18 @@ def extract_album_links(page) -> List[str]:
             continue
 
         href = normalize_url(href)
-
         if href.startswith("/"):
             href = f"https://open.spotify.com{href}"
 
         match = re.search(
-            r"https://open\.spotify\.com/"
-            r"(?:intl-[^/]+/)?album/([A-Za-z0-9]+)",
+            r"https://open\.spotify\.com/(?:intl-[^/]+/)?album/([A-Za-z0-9]+)",
             href,
         )
-
         if not match:
             continue
 
         album_id = match.group(1)
-        canonical_url = (
-            f"https://open.spotify.com/album/{album_id}"
-        )
-
+        canonical_url = f"https://open.spotify.com/album/{album_id}"
         if canonical_url not in links:
             links.append(canonical_url)
 
@@ -262,13 +198,11 @@ def extract_album_links(page) -> List[str]:
 
 def get_album_title(page, album_url: str) -> str:
     album_id = get_spotify_id(album_url, "album")
-
     anchors = page.locator("a[href*='/album/']")
     count = anchors.count()
 
     for index in range(count):
         anchor = anchors.nth(index)
-
         try:
             href = anchor.get_attribute("href") or ""
             text = anchor.inner_text(timeout=3000).strip()
@@ -279,25 +213,94 @@ def get_album_title(page, album_url: str) -> str:
             continue
 
         title = " ".join(text.split())
-
         if len(title) <= 250:
             return title
 
     return ""
 
 
-def scrape_first_project(
-    page,
-    artist: Dict[str, Any],
-) -> Optional[Dict[str, Any]]:
-    """
-    Ouvre /discography/all et retourne uniquement
-    le premier projet trouvé.
-    """
-    artist_name = artist["name"]
-    discography_url = build_discography_url(
-        artist["url"]
+def parse_spotify_release_date_from_html(html: str) -> Optional[str]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    meta = soup.find("meta", attrs={"property": "music:release_date"})
+    if meta and meta.get("content"):
+        parsed = parse_date(meta["content"])
+        if parsed:
+            return parsed
+
+    for script in soup.find_all("script"):
+        script_text = script.get_text(" ", strip=True)
+        if not script_text:
+            continue
+
+        match = re.search(
+            r'"release_date"\s*:\s*"([^"]+)"',
+            script_text,
+            flags=re.IGNORECASE,
+        )
+        if match:
+            parsed = parse_date(match.group(1))
+            if parsed:
+                return parsed
+
+    text = " ".join(soup.get_text(" ", strip=True).split())
+    match = re.search(
+        r"\b(20\d{2})(?:-\d{2})?(?:-\d{2})?\b",
+        text,
     )
+    if match:
+        parsed = parse_date(match.group(0))
+        if parsed:
+            return parsed
+
+    return None
+
+
+def spotify_project_info_from_html(html: str) -> Optional[Dict[str, Any]]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    meta_type = soup.find("meta", attrs={"property": "music:release_type"})
+    if meta_type and meta_type.get("content"):
+        release_type = meta_type["content"].strip().lower()
+    else:
+        release_type = ""
+
+    if not release_type:
+        for script in soup.find_all("script"):
+            script_text = script.get_text(" ", strip=True)
+            if not script_text:
+                continue
+            match = re.search(
+                r'"album_type"\s*:\s*"([^"]+)"',
+                script_text,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                release_type = match.group(1).strip().lower()
+                break
+
+    release_date = parse_spotify_release_date_from_html(html)
+    if not release_date:
+        return None
+
+    year = int(release_date[:4])
+    if release_type != "single":
+        return {"skip": True, "reason": f"release_type={release_type or 'unknown'}"}
+
+    if year != TARGET_YEAR:
+        return {"skip": True, "reason": f"year={year}"}
+
+    return {
+        "skip": False,
+        "release_type": release_type,
+        "release_date": release_date,
+        "year": year,
+    }
+
+
+def scrape_first_project(page, artist: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    artist_name = artist["name"]
+    discography_url = build_discography_url(artist["url"])
 
     log(f"[SPOTIFY] Artiste : {artist_name}")
     log(f"[SPOTIFY] URL : {discography_url}")
@@ -306,50 +309,43 @@ def scrape_first_project(
         page.goto(
             discography_url,
             wait_until="domcontentloaded",
-            timeout=45000,
+            timeout=120000,
         )
+        page.wait_for_selector("a[href*='/album/']", timeout=15000)
     except PlaywrightTimeoutError:
-        log(
-            "[WARN][SPOTIFY] Timeout de chargement, "
-            "analyse poursuivie."
-        )
+        log("[WARN][SPOTIFY] Timeout de chargement.")
     except Exception as error:
         log(f"[ERREUR][SPOTIFY] {error}")
         return None
 
-    try:
-        page.wait_for_timeout(5000)
-    except Exception:
-        pass
+    html = page.content()
+    info = spotify_project_info_from_html(html)
+
+    if info is None:
+        log("[SKIP][SPOTIFY] Métadonnées de sortie introuvables.")
+        return None
+
+    if info.get("skip"):
+        log(f"[SKIP][SPOTIFY] Projet ignoré : {info['reason']}.")
+        return None
 
     album_links = extract_album_links(page)
-
     if not album_links:
-        log(
-            f"[SPOTIFY] Aucun projet trouvé pour {artist_name}."
-        )
+        log(f"[SPOTIFY] Aucun projet trouvé pour {artist_name}.")
         return None
 
     first_album_url = album_links[0]
-    first_album_id = get_spotify_id(
-        first_album_url,
-        "album",
-    )
-
-    title = get_album_title(
-        page,
-        first_album_url,
-    )
-
-    if not title:
-        title = artist_name
+    first_album_id = get_spotify_id(first_album_url, "album")
+    title = get_album_title(page, first_album_url) or artist_name
 
     project = {
         "title": title,
         "artists": [artist_name],
         "album_id": first_album_id,
         "album_url": first_album_url,
-        "release_type": "album",
+        "release_type": "single",
+        "release_year": info["year"],
+        "release_date": info["release_date"],
     }
 
     log(f"[SPOTIFY] Premier titre : {title}")
@@ -360,11 +356,7 @@ def scrape_first_project(
 
 
 def parse_date(value: str) -> Optional[str]:
-    """
-    Convertit une date en YYYY-MM-DD.
-    """
     value = " ".join(value.strip().split())
-
     numeric_formats = (
         "%Y-%m-%d",
         "%d/%m/%Y",
@@ -375,18 +367,11 @@ def parse_date(value: str) -> Optional[str]:
 
     for date_format in numeric_formats:
         try:
-            return datetime.strptime(
-                value,
-                date_format,
-            ).strftime("%Y-%m-%d")
+            return datetime.strptime(value, date_format).strftime("%Y-%m-%d")
         except ValueError:
             continue
 
-    match = re.fullmatch(
-        r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})",
-        value,
-    )
-
+    match = re.fullmatch(r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})", value)
     if not match:
         return None
 
@@ -399,126 +384,52 @@ def parse_date(value: str) -> Optional[str]:
         return None
 
     try:
-        return date(
-            year_value,
-            month_value,
-            day_value,
-        ).isoformat()
+        return date(year_value, month_value, day_value).isoformat()
     except ValueError:
         return None
 
 
-def extract_release_date_from_html(
-    html: str,
-) -> Optional[str]:
-    """
-    Cherche prioritairement une date associée à Release
-    ou Released dans le HTML de Soundcharts.
-
-    Formats pris en charge :
-    Release August 24, 2026
-    Released August 24, 2026
-    Release Aug 24, 2026
-    2026-08-24
-    """
+def extract_release_date_from_html(html: str) -> Optional[str]:
     soup = BeautifulSoup(html, "html.parser")
-
-    for element in soup(
-        ["script", "style", "noscript"]
-    ):
+    for element in soup(["script", "style", "noscript"]):
         element.decompose()
 
-    visible_text = soup.get_text(" ", strip=True)
-    visible_text = " ".join(visible_text.split())
+    visible_text = " ".join(soup.get_text(" ", strip=True).split())
 
     full_months = (
         "January|February|March|April|May|June|July|"
         "August|September|October|November|December"
     )
+    short_months = "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec"
 
-    short_months = (
-        "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|"
-        "Oct|Nov|Dec"
-    )
-
-    release_patterns = [
-        rf"\bRelease(?:d)?\s+"
-        rf"({full_months})\s+(\d{{1,2}}),\s+(\d{{4}})",
-
-        rf"\bRelease(?:d)?\s+"
-        rf"({short_months})\.?\s+(\d{{1,2}}),\s+(\d{{4}})",
+    patterns = [
+        rf"\bRelease(?:d)?\s+({full_months})\s+(\d{{1,2}}),\s+(\d{{4}})",
+        rf"\bRelease(?:d)?\s+({short_months})\.?\s+(\d{{1,2}}),\s+(\d{{4}})",
+        rf"\b({full_months})\s+(\d{{1,2}}),\s+(\d{{4}})\b",
     ]
 
-    for pattern in release_patterns:
-        match = re.search(
-            pattern,
-            visible_text,
-            flags=re.IGNORECASE,
-        )
-
+    for pattern in patterns:
+        match = re.search(pattern, visible_text, flags=re.IGNORECASE)
         if not match:
             continue
-
-        candidate = (
-            f"{match.group(1)} "
-            f"{match.group(2)}, "
-            f"{match.group(3)}"
-        )
-
+        candidate = f"{match.group(1)} {match.group(2)}, {match.group(3)}"
         parsed = parse_date(candidate)
-
         if parsed:
-            log(
-                f"[SOUNDCHARTS] Release détectée : {parsed}"
-            )
+            log(f"[SOUNDCHARTS] Date détectée : {parsed}")
             return parsed
 
-    numeric_patterns = [
+    for pattern in [
         r"\b\d{4}-\d{2}-\d{2}\b",
         r"\b\d{2}/\d{2}/\d{4}\b",
         r"\b\d{2}-\d{2}-\d{4}\b",
         r"\b\d{4}/\d{2}/\d{2}\b",
-    ]
-
-    for pattern in numeric_patterns:
+    ]:
         match = re.search(pattern, visible_text)
-
-        if not match:
-            continue
-
-        parsed = parse_date(match.group(0))
-
-        if parsed:
-            log(
-                f"[SOUNDCHARTS] Date numérique : {parsed}"
-            )
-            return parsed
-
-    english_date_pattern = (
-        rf"\b({full_months})\s+"
-        rf"(\d{{1,2}}),\s+(\d{{4}})\b"
-    )
-
-    match = re.search(
-        english_date_pattern,
-        visible_text,
-        flags=re.IGNORECASE,
-    )
-
-    if match:
-        candidate = (
-            f"{match.group(1)} "
-            f"{match.group(2)}, "
-            f"{match.group(3)}"
-        )
-
-        parsed = parse_date(candidate)
-
-        if parsed:
-            log(
-                f"[SOUNDCHARTS] Date anglaise : {parsed}"
-            )
-            return parsed
+        if match:
+            parsed = parse_date(match.group(0))
+            if parsed:
+                log(f"[SOUNDCHARTS] Date numérique : {parsed}")
+                return parsed
 
     return None
 
@@ -532,16 +443,13 @@ def find_soundcharts_input(page):
         "input[type='search']",
         "input[type='text']",
     ]
-
     for selector in selectors:
         locator = page.locator(selector).first
-
         try:
             if locator.is_visible(timeout=1500):
                 return locator
         except Exception:
             pass
-
     return None
 
 
@@ -554,27 +462,17 @@ def find_soundcharts_button(page):
         "button[class*='search' i]",
         "form button",
     ]
-
     for selector in selectors:
         locator = page.locator(selector).first
-
         try:
             if locator.is_visible(timeout=1500):
                 return locator
         except Exception:
             pass
-
     return None
 
 
-def search_soundcharts(
-    page,
-    project: Dict[str, Any],
-) -> Optional[str]:
-    """
-    Recherche le projet sur Soundcharts et lit la date
-    dans le HTML rendu après la recherche.
-    """
+def search_soundcharts(page, project: Dict[str, Any]) -> Optional[str]:
     title = project["title"]
     artist_name = project["artists"][0]
     query = f"{title} {artist_name}".strip()
@@ -582,81 +480,41 @@ def search_soundcharts(
     log(f"[SOUNDCHARTS] Recherche : {query}")
 
     try:
-        page.goto(
-            SOUNDCHARTS_URL,
-            wait_until="domcontentloaded",
-            timeout=45000,
-        )
+        page.goto(SOUNDCHARTS_URL, wait_until="domcontentloaded", timeout=120000)
     except Exception as error:
-        log(
-            f"[ERREUR][SOUNDCHARTS] "
-            f"Page inaccessible : {error}"
-        )
+        log(f"[ERREUR][SOUNDCHARTS] Page inaccessible : {error}")
         return None
 
     search_input = find_soundcharts_input(page)
-
     if search_input is None:
-        log(
-            "[ERREUR][SOUNDCHARTS] "
-            "Champ de recherche introuvable."
-        )
+        log("[ERREUR][SOUNDCHARTS] Champ de recherche introuvable.")
         return None
 
     try:
         search_input.fill(query)
-        log("[SOUNDCHARTS] Champ rempli.")
     except Exception as error:
-        log(
-            f"[ERREUR][SOUNDCHARTS] "
-            f"Impossible de remplir le champ : {error}"
-        )
+        log(f"[ERREUR][SOUNDCHARTS] Impossible de remplir le champ : {error}")
         return None
 
     search_button = find_soundcharts_button(page)
-
     if search_button is None:
-        log(
-            "[ERREUR][SOUNDCHARTS] "
-            "Bouton de recherche introuvable."
-        )
+        log("[ERREUR][SOUNDCHARTS] Bouton de recherche introuvable.")
         return None
 
     try:
         search_button.click()
-        log("[SOUNDCHARTS] Recherche envoyée.")
+        page.wait_for_timeout(4000)
     except Exception as error:
-        log(
-            f"[ERREUR][SOUNDCHARTS] "
-            f"Impossible de cliquer : {error}"
-        )
+        log(f"[ERREUR][SOUNDCHARTS] Impossible d’envoyer la recherche : {error}")
         return None
 
-    try:
-        page.wait_for_timeout(5000)
-    except Exception:
-        pass
-
     rendered_html = page.content()
-
-    log(
-        f"[SOUNDCHARTS] HTML reçu : "
-        f"{len(rendered_html)} caractères."
-    )
-
-    release_date = extract_release_date_from_html(
-        rendered_html
-    )
+    release_date = extract_release_date_from_html(rendered_html)
 
     if release_date:
-        log(
-            f"[SOUNDCHARTS] Date de sortie : "
-            f"{release_date}"
-        )
+        log(f"[SOUNDCHARTS] Date de sortie : {release_date}")
     else:
-        log(
-            "[SOUNDCHARTS] Date de sortie introuvable."
-        )
+        log("[SOUNDCHARTS] Date de sortie introuvable.")
 
     return release_date
 
@@ -674,7 +532,6 @@ def release_already_exists(
     for track in tracks:
         if album_id and track.get("id") == album_id:
             return True
-
         if (
             track.get("artist_id") == artist_id
             and track.get("album_name") == title
@@ -693,20 +550,45 @@ def build_release_entry(
     return {
         "id": project.get("album_id", ""),
         "name": project.get("title", ""),
-        "artist_name": artist.get(
-            "name",
-            "Artiste inconnu",
-        ),
+        "artist_name": artist.get("name", "Artiste inconnu"),
         "artist_id": artist.get("id", ""),
         "album_name": project.get("title", ""),
-        "release_type": project.get(
-            "release_type",
-            "album",
-        ),
+        "release_type": project.get("release_type", "single"),
         "release_date": release_date,
         "album_image": "",
         "url": project.get("album_url", ""),
     }
+
+
+def process_artist(
+    spotify_page,
+    soundcharts_page,
+    artist: Dict[str, Any],
+    tracks: List[Dict[str, Any]],
+    today: str,
+) -> None:
+    project = scrape_first_project(spotify_page, artist)
+    if project is None:
+        log("[SKIP] Aucun projet trouvé.")
+        return
+
+    release_date = search_soundcharts(soundcharts_page, project)
+    if release_date is None:
+        log("[SKIP] Date introuvable dans Soundcharts.")
+        return
+
+    if release_date != today:
+        log(f"[INFO] Projet ignoré : {release_date} != {today}")
+        return
+
+    if release_already_exists(tracks, project, artist, release_date):
+        log("[INFO] Projet déjà présent dans sorties.json.")
+        return
+
+    entry = build_release_entry(artist, project, release_date)
+    tracks.append(entry)
+    save_releases({"tracks": tracks})
+    log(f"[SUCCÈS] Sortie ajoutée : {entry['album_name']} — {entry['artist_name']}")
 
 
 def main() -> None:
@@ -721,106 +603,72 @@ def main() -> None:
     releases_data = load_releases()
     tracks = releases_data["tracks"]
 
-    log(
-        f"[INFO] Artistes à traiter : {len(artists)}"
-    )
+    log(f"[INFO] Artistes à traiter : {len(artists)}")
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            headless=True,
-        )
-
+        browser = playwright.chromium.launch(headless=True)
         context = browser.new_context(
             locale="fr-FR",
             user_agent=SPOTIFY_USER_AGENT,
-            viewport={
-                "width": 1440,
-                "height": 1000,
-            },
+            viewport={"width": 1440, "height": 1000},
         )
+        context.set_default_timeout(30000)
+        context.set_default_navigation_timeout(120000)
 
         spotify_page = context.new_page()
         soundcharts_page = context.new_page()
 
         try:
-            for index, artist in enumerate(
-                artists,
-                start=1,
-            ):
-                artist_name = artist["name"]
-
+            for index, artist in enumerate(artists, start=1):
                 log("")
                 log("=" * 70)
-                log(
-                    f"[ARTISTE {index}/{len(artists)}] "
-                    f"{artist_name}"
-                )
+                log(f"[ARTISTE {index}/{len(artists)}] {artist['name']}")
                 log("=" * 70)
 
-                project = scrape_first_project(
-                    spotify_page,
-                    artist,
-                )
-
-                if project is None:
-                    log("[SKIP] Aucun projet trouvé.")
-                    continue
-
-                release_date = search_soundcharts(
-                    soundcharts_page,
-                    project,
-                )
-
-                if release_date is None:
-                    log(
-                        "[SKIP] Date introuvable "
-                        "dans Soundcharts."
+                try:
+                    process_artist(
+                        spotify_page,
+                        soundcharts_page,
+                        artist,
+                        tracks,
+                        today,
                     )
+                except Exception as error:
+                    log(f"[ERREUR ARTISTE] {artist['name']} : {error}")
                     continue
 
-                if release_date != today:
-                    log(
-                        f"[INFO] Projet ignoré : "
-                        f"{release_date} != {today}"
+                if index % 75 == 0:
+                    log("[INFO] Recréation du contexte navigateur.")
+                    try:
+                        spotify_page.close()
+                        soundcharts_page.close()
+                        context.close()
+                    except Exception:
+                        pass
+
+                    context = browser.new_context(
+                        locale="fr-FR",
+                        user_agent=SPOTIFY_USER_AGENT,
+                        viewport={"width": 1440, "height": 1000},
                     )
-                    continue
+                    context.set_default_timeout(30000)
+                    context.set_default_navigation_timeout(120000)
+                    spotify_page = context.new_page()
+                    soundcharts_page = context.new_page()
 
-                if release_already_exists(
-                    tracks,
-                    project,
-                    artist,
-                    release_date,
-                ):
-                    log(
-                        "[INFO] Projet déjà présent "
-                        "dans sorties.json."
-                    )
-                    continue
-
-                entry = build_release_entry(
-                    artist,
-                    project,
-                    release_date,
-                )
-
-                tracks.append(entry)
-                save_releases(releases_data)
-
-                log(
-                    f"[SUCCÈS] Sortie ajoutée : "
-                    f"{entry['album_name']} — "
-                    f"{entry['artist_name']}"
-                )
+                time.sleep(random.uniform(1.5, 4.0))
 
         finally:
+            try:
+                context.close()
+            except Exception:
+                pass
             browser.close()
             log("[INFO] Navigateur fermé.")
 
     log("")
     log("=" * 70)
-    log(
-        f"[FIN] Total de sorties : {len(tracks)}"
-    )
+    log(f"[FIN] Total de sorties : {len(tracks)}")
     log("=" * 70)
 
 
