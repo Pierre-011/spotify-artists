@@ -166,13 +166,16 @@ def parse_date(value: str) -> Optional[date]:
 
 def extract_release_date_from_html(html: str) -> Optional[date]:
     soup = BeautifulSoup(html, "lxml")
+
     for p in soup.find_all("p"):
         text = " ".join(p.get_text(" ", strip=True).split())
         if not text:
             continue
+
         parsed = parse_date(text)
         if parsed:
             return parsed
+
     return None
 
 
@@ -248,8 +251,8 @@ def create_context(browser):
         user_agent=SPOTIFY_USER_AGENT,
         viewport={"width": 1440, "height": 1000},
     )
-    context.set_default_timeout(15000)
-    context.set_default_navigation_timeout(60000)
+    context.set_default_timeout(20000)
+    context.set_default_navigation_timeout(90000)
     block_unneeded_resources(context)
     return context
 
@@ -262,8 +265,8 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
     log(f"[SPOTIFY] URL : {discography_url}")
 
     try:
-        page.goto(discography_url, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_selector("a[href*='/album/']", timeout=10000)
+        page.goto(discography_url, wait_until="domcontentloaded", timeout=90000)
+        page.wait_for_selector("a[href*='/album/']", timeout=15000)
     except PlaywrightTimeoutError:
         log("[WARN][SPOTIFY] Timeout de chargement.")
     except Exception as error:
@@ -279,8 +282,10 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
     latest_album_id = get_spotify_id(latest_album_url, "album")
 
     try:
-        page.goto(latest_album_url, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_selector("p", timeout=10000)
+        page.goto(latest_album_url, wait_until="domcontentloaded", timeout=90000)
+        page.wait_for_selector("p", timeout=15000)
+    except PlaywrightTimeoutError:
+        log("[WARN][SPOTIFY] Timeout sur la page du projet.")
     except Exception as error:
         log(f"[ERREUR][SPOTIFY] Impossible d’ouvrir la sortie : {error}")
         return None
@@ -357,7 +362,10 @@ def process_artist(artist: Dict[str, Any], today: date) -> Optional[Dict[str, An
                 return None
             release_date = project["release_date"]
             if release_date != today:
-                log(f"[INFO] Projet ignoré : {release_date.isoformat()} != {today.isoformat()}")
+                log(
+                    f"[INFO] Projet ignoré : "
+                    f"{release_date.isoformat()} != {today.isoformat()}"
+                )
                 return None
             return project
         finally:
