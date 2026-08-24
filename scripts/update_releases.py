@@ -1,7 +1,8 @@
 import json
 import re
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+import random
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -22,8 +23,6 @@ SPOTIFY_USER_AGENT = (
     "(KHTML, like Gecko) "
     "Chrome/131.0.0.0 Safari/537.36"
 )
-
-MAX_WORKERS = 4
 
 
 def log(message: str) -> None:
@@ -165,7 +164,7 @@ def parse_date(value: str) -> Optional[date]:
 
 
 def extract_release_date_from_html(html: str) -> Optional[date]:
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(html, "html.parser")
 
     for p in soup.find_all("p"):
         text = " ".join(p.get_text(" ", strip=True).split())
@@ -235,28 +234,6 @@ def get_album_title(page, album_url: str) -> str:
     return ""
 
 
-def block_unneeded_resources(context) -> None:
-    def handler(route):
-        resource_type = route.request.resource_type
-        if resource_type in {"image", "stylesheet", "font", "media"}:
-            return route.abort()
-        return route.continue_()
-
-    context.route("**/*", handler)
-
-
-def create_context(browser):
-    context = browser.new_context(
-        locale="fr-FR",
-        user_agent=SPOTIFY_USER_AGENT,
-        viewport={"width": 1440, "height": 1000},
-    )
-    context.set_default_timeout(20000)
-    context.set_default_navigation_timeout(90000)
-    block_unneeded_resources(context)
-    return context
-
-
 def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     artist_name = artist["name"]
     discography_url = build_discography_url(artist["url"])
@@ -265,7 +242,7 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
     log(f"[SPOTIFY] URL : {discography_url}")
 
     try:
-        page.goto(discography_url, wait_until="domcontentloaded", timeout=90000)
+        page.goto(discography_url, wait_until="domcontentloaded", timeout=120000)
         page.wait_for_selector("a[href*='/album/']", timeout=15000)
     except PlaywrightTimeoutError:
         log("[WARN][SPOTIFY] Timeout de chargement.")
@@ -282,16 +259,15 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
     latest_album_id = get_spotify_id(latest_album_url, "album")
 
     try:
-        page.goto(latest_album_url, wait_until="domcontentloaded", timeout=90000)
-        page.wait_for_selector("p", timeout=15000)
-    except PlaywrightTimeoutError:
-        log("[WARN][SPOTIFY] Timeout sur la page du projet.")
+        page.goto(latest_album_url, wait_until="domcontentloaded", timeout=120000)
+        page.wait_for_timeout(3000)
     except Exception as error:
         log(f"[ERREUR][SPOTIFY] Impossible d’ouvrir la sortie : {error}")
         return None
 
     html = page.content()
     release_date = extract_release_date_from_html(html)
+
     if release_date is None:
         log("[SKIP][SPOTIFY] Date de sortie introuvable dans les p tags.")
         return None
@@ -317,6 +293,7 @@ def release_already_exists(
     album_id = project.get("album_id", "")
     artist_id = artist.get("id", "")
     title = project.get("title", "")
+
     release_date_str = release_date.isoformat()
 
     for track in tracks:
@@ -351,29 +328,31 @@ def build_release_entry(
     }
 
 
-def process_artist(artist: Dict[str, Any], today: date) -> Optional[Dict[str, Any]]:
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        context = create_context(browser)
-        page = context.new_page()
-        try:
-            project = get_latest_spotify_project(page, artist)
-            if project is None:
-                return None
-            release_date = project["release_date"]
-            if release_date != today:
-                log(
-                    f"[INFO] Projet ignoré : "
-                    f"{release_date.isoformat()} != {today.isoformat()}"
-                )
-                return None
-            return project
-        finally:
-            try:
-                context.close()
-            except Exception:
-                pass
-            browser.close()
+def process_artist(
+    spotify_page,
+    artist: Dict[str, Any],
+    tracks: List[Dict[str, Any]],
+    today: date,
+) -> None:
+    project = get_latest_spotify_project(spotify_page, artist)
+    if project is None:
+        log("[SKIP] Dernière sortie non éligible.")
+        return
+
+    release_date = project["release_date"]
+
+    if release_date != today:
+        log(f"[INFO] Projet ignoré : {release_date.isoformat()} != {today.isoformat()}")
+        return
+
+    if release_already_exists(tracks, project, artist, release_date):
+        log("[INFO] Projet déjà présent dans sorties.json.")
+        return
+
+    entry = build_release_entry(artist, project, release_date)
+    tracks.append(entry)
+    save_releases({"tracks": tracks})
+    log(f"[SUCCÈS] Sortie ajoutée : {entry['album_name']} — {entry['artist_name']}")
 
 
 def main() -> None:
@@ -390,43 +369,62 @@ def main() -> None:
 
     log(f"[INFO] Artistes à traiter : {len(artists)}")
 
-    results: List[Dict[str, Any]] = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = {
-            executor.submit(process_artist, artist, today): artist
-            for artist in artists
-        }
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        context = browser.new_context(
+            locale="fr-FR",
+            user_agent=SPOTIFY_USER_AGENT,
+            viewport={"width": 1440, "height": 1000},
+        )
+        context.set_default_timeout(30000)
+        context.set_default_navigation_timeout(120000)
 
-        for index, future in enumerate(as_completed(futures), start=1):
-            artist = futures[future]
+        spotify_page = context.new_page()
 
-            log("")
-            log("=" * 70)
-            log(f"[ARTISTE {index}/{len(artists)}] {artist['name']}")
-            log("=" * 70)
+        try:
+            for index, artist in enumerate(artists, start=1):
+                log("")
+                log("=" * 70)
+                log(f"[ARTISTE {index}/{len(artists)}] {artist['name']}")
+                log("=" * 70)
 
+                try:
+                    process_artist(
+                        spotify_page,
+                        artist,
+                        tracks,
+                        today,
+                    )
+                except Exception as error:
+                    log(f"[ERREUR ARTISTE] {artist['name']} : {error}")
+                    continue
+
+                if index % 75 == 0:
+                    log("[INFO] Recréation du contexte navigateur.")
+                    try:
+                        spotify_page.close()
+                        context.close()
+                    except Exception:
+                        pass
+
+                    context = browser.new_context(
+                        locale="fr-FR",
+                        user_agent=SPOTIFY_USER_AGENT,
+                        viewport={"width": 1440, "height": 1000},
+                    )
+                    context.set_default_timeout(30000)
+                    context.set_default_navigation_timeout(120000)
+                    spotify_page = context.new_page()
+
+                time.sleep(random.uniform(1.5, 4.0))
+
+        finally:
             try:
-                project = future.result()
-            except Exception as error:
-                log(f"[ERREUR ARTISTE] {artist['name']} : {error}")
-                continue
-
-            if project is None:
-                log("[SKIP] Dernière sortie non éligible.")
-                continue
-
-            release_date = project["release_date"]
-            if release_already_exists(tracks, project, artist, release_date):
-                log("[INFO] Projet déjà présent dans sorties.json.")
-                continue
-
-            entry = build_release_entry(artist, project, release_date)
-            tracks.append(entry)
-            results.append(entry)
-            log(f"[SUCCÈS] Sortie ajoutée : {entry['album_name']} — {entry['artist_name']}")
-
-    if results:
-        save_releases({"tracks": tracks})
+                context.close()
+            except Exception:
+                pass
+            browser.close()
+            log("[INFO] Navigateur fermé.")
 
     log("")
     log("=" * 70)
