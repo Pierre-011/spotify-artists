@@ -4,10 +4,6 @@ on:
   schedule:
     - cron: "30 0 * * *"
       timezone: "Europe/Paris"
-    - cron: "30 0 * * *"
-      timezone: "Europe/London"
-    - cron: "30 0 * * *"
-      timezone: "America/New_York"
 
   workflow_dispatch:
 
@@ -22,7 +18,7 @@ jobs:
   update:
     name: Vérifier les sorties musicales
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Récupérer le dépôt
@@ -38,7 +34,7 @@ jobs:
       - name: Installer les dépendances Python
         run: |
           python -m pip install --upgrade pip
-          python -m pip install playwright
+          python -m pip install playwright beautifulsoup4
 
       - name: Installer Chromium pour Playwright
         run: |
@@ -51,6 +47,8 @@ jobs:
           ls -la data
           echo "Contenu de scripts :"
           ls -la scripts
+          test -f data/artistes.json
+          test -f scripts/update_releases.py
 
       - name: Mettre à jour les sorties
         env:
@@ -60,6 +58,7 @@ jobs:
 
       - name: Vérifier les modifications
         id: changes
+        shell: bash
         run: |
           if git diff --quiet -- data/sorties.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
