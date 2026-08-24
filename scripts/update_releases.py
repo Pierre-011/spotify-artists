@@ -182,16 +182,40 @@ def save_releases(data: Dict[str, Any]) -> None:
 
 
 def parse_date(value: str) -> Optional[date]:
+    """Parse une date Spotify en français ou en anglais.
+
+    Formats pris en charge notamment :
+    - 2026-08-07
+    - 07/08/2026
+    - 07-08-2026
+    - 08/07/2026
+    - August 7, 2026
+    - August 7 2026
+    - 7 August 2026
+    - 7 août 2026
+    - 7 aout 2026
+    - 7 août 2026 avec espace insécable
+    """
     if not value:
         return None
 
     value = " ".join(str(value).strip().split())
     value = value.replace("\u00a0", " ")
 
-    # Format ISO : 2026-08-24
+    # Normalisation légère pour pouvoir reconnaître les accents français
+    # (août -> aout, février -> fevrier, décembre -> decembre, etc.).
+    import unicodedata
+
+    normalized = unicodedata.normalize("NFD", value)
+    normalized = "".join(
+        char for char in normalized
+        if unicodedata.category(char) != "Mn"
+    )
+
+    # Format ISO : 2026-08-24 / 2026/08/24
     match = re.search(
         r"\b((?:19|20)\d{2})[-/](\d{1,2})[-/](\d{1,2})\b",
-        value,
+        normalized,
     )
 
     if match:
@@ -204,7 +228,8 @@ def parse_date(value: str) -> Optional[date]:
         except ValueError:
             return None
 
-    # Formats numériques
+    # Formats numériques.
+    # On conserve l'ordre existant : DD/MM/YYYY avant MM/DD/YYYY.
     for fmt in (
         "%d/%m/%Y",
         "%d-%m-%Y",
@@ -216,38 +241,59 @@ def parse_date(value: str) -> Optional[date]:
         except ValueError:
             pass
 
+    # Mois anglais + français.
     months = {
+        # Anglais
         "january": 1,
+        "jan": 1,
         "february": 2,
+        "feb": 2,
         "march": 3,
+        "mar": 3,
         "april": 4,
+        "apr": 4,
         "may": 5,
         "june": 6,
-        "july": 7,
-        "august": 8,
-        "september": 9,
-        "october": 10,
-        "november": 11,
-        "december": 12,
-        "jan": 1,
-        "feb": 2,
-        "mar": 3,
-        "apr": 4,
         "jun": 6,
+        "july": 7,
         "jul": 7,
+        "august": 8,
         "aug": 8,
+        "september": 9,
         "sep": 9,
         "sept": 9,
+        "october": 10,
         "oct": 10,
+        "november": 11,
         "nov": 11,
+        "december": 12,
         "dec": 12,
+
+        # Français (sans accents car `normalized` les retire)
+        "janvier": 1,
+        "janv": 1,
+        "fevrier": 2,
+        "fevr": 2,
+        "fev": 2,
+        "mars": 3,
+        "avril": 4,
+        "avr": 4,
+        "mai": 5,
+        "juin": 6,
+        "juillet": 7,
+        "juil": 7,
+        "aout": 8,
+        "septembre": 9,
+        "octobre": 10,
+        "novembre": 11,
+        "decembre": 12,
     }
 
-    # Exemple : August 24, 2026
+    # Format anglais : August 24, 2026 / August 24 2026
     match = re.search(
-        r"\b([A-Za-z]+)\s+(\d{1,2}),?\s+"
+        r"\b([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+"
         r"((?:19|20)\d{2})\b",
-        value,
+        normalized,
         flags=re.IGNORECASE,
     )
 
@@ -260,6 +306,27 @@ def parse_date(value: str) -> Optional[date]:
                     int(match.group(3)),
                     month,
                     int(match.group(2)),
+                )
+            except ValueError:
+                return None
+
+    # Format français : 7 août 2026 / 1er août 2026
+    match = re.search(
+        r"\b(\d{1,2})(?:er)?\s+([A-Za-z]+)\s+"
+        r"((?:19|20)\d{2})\b",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+
+    if match:
+        month = months.get(match.group(2).lower())
+
+        if month:
+            try:
+                return date(
+                    int(match.group(3)),
+                    month,
+                    int(match.group(1)),
                 )
             except ValueError:
                 return None
