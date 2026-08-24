@@ -26,10 +26,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Installer Playwright
+      - name: Installer Playwright et les dépendances Python
         run: |
           python -m pip install --upgrade pip
-          pip install playwright
+          pip install playwright requests beautifulsoup4
           python -m playwright install --with-deps chromium
 
       - name: Mettre à jour les sorties
