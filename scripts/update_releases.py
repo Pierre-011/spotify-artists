@@ -17,8 +17,6 @@ ROOT_DIR = Path.cwd()
 ARTISTS_FILE = ROOT_DIR / "data" / "artistes.json"
 RELEASES_FILE = ROOT_DIR / "data" / "sorties.json"
 
-SOUNDCHARTS_URL = "https://soundcharts.com/en/isrc-finder"
-
 SPOTIFY_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) "
     "AppleWebKit/537.36 "
@@ -27,33 +25,6 @@ SPOTIFY_USER_AGENT = (
 )
 
 TARGET_YEAR = 2026
-
-ENGLISH_MONTHS = {
-    "january": 1,
-    "february": 2,
-    "march": 3,
-    "april": 4,
-    "may": 5,
-    "june": 6,
-    "july": 7,
-    "august": 8,
-    "september": 9,
-    "october": 10,
-    "november": 11,
-    "december": 12,
-    "jan": 1,
-    "feb": 2,
-    "mar": 3,
-    "apr": 4,
-    "jun": 6,
-    "jul": 7,
-    "aug": 8,
-    "sep": 9,
-    "sept": 9,
-    "oct": 10,
-    "nov": 11,
-    "dec": 12,
-}
 
 
 def log(message: str) -> None:
@@ -165,6 +136,7 @@ def save_releases(data: Dict[str, Any]) -> None:
 
 def parse_date(value: str) -> Optional[str]:
     value = " ".join(value.strip().split())
+
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d"):
         try:
             return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
@@ -176,7 +148,14 @@ def parse_date(value: str) -> Optional[str]:
         return None
 
     month_name = match.group(1).lower()
-    month_value = ENGLISH_MONTHS.get(month_name)
+    month_map = {
+        "january": 1, "february": 2, "march": 3, "april": 4,
+        "may": 5, "june": 6, "july": 7, "august": 8,
+        "september": 9, "october": 10, "november": 11, "december": 12,
+        "jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7,
+        "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+    }
+    month_value = month_map.get(month_name)
     if month_value is None:
         return None
 
@@ -186,32 +165,11 @@ def parse_date(value: str) -> Optional[str]:
         return None
 
 
-def extract_release_type_from_html(html: str) -> Optional[str]:
-    soup = BeautifulSoup(html, "html.parser")
-
-    for span in soup.find_all("span"):
-        text = " ".join(span.get_text(" ", strip=True).split())
-        if not text:
-            continue
-
-        low = text.lower()
-        if re.search(r"\bsingle\b", low):
-            return "single"
-        if re.search(r"\balbum\b", low):
-            return "album"
-        if re.search(r"\bep\b", low):
-            return "ep"
-        if re.search(r"\bcompilation\b", low):
-            return "compilation"
-
-    return None
-
-
 def extract_release_date_from_html(html: str) -> Optional[str]:
     soup = BeautifulSoup(html, "html.parser")
 
-    for span in soup.find_all("span"):
-        text = " ".join(span.get_text(" ", strip=True).split())
+    for p in soup.find_all("p"):
+        text = " ".join(p.get_text(" ", strip=True).split())
         if not text:
             continue
 
@@ -222,22 +180,6 @@ def extract_release_date_from_html(html: str) -> Optional[str]:
         m = re.search(r"\b(20\d{2})\b", text)
         if m:
             return f"{m.group(1)}-01-01"
-
-    meta = soup.find("meta", attrs={"property": "music:release_date"})
-    if meta and meta.get("content"):
-        parsed = parse_date(meta["content"])
-        if parsed:
-            return parsed
-
-    for script in soup.find_all("script"):
-        script_text = script.get_text(" ", strip=True)
-        if not script_text:
-            continue
-        match = re.search(r'"release_date"\s*:\s*"([^"]+)"', script_text, flags=re.IGNORECASE)
-        if match:
-            parsed = parse_date(match.group(1))
-            if parsed:
-                return parsed
 
     return None
 
@@ -330,19 +272,10 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
         return None
 
     html = page.content()
-    release_type = extract_release_type_from_html(html)
     release_date = extract_release_date_from_html(html)
 
-    if not release_type:
-        log("[SKIP][SPOTIFY] Type de sortie introuvable dans les spans.")
-        return None
-
-    if release_type != "single":
-        log(f"[SKIP][SPOTIFY] Projet ignoré : type={release_type}.")
-        return None
-
     if not release_date:
-        log("[SKIP][SPOTIFY] Date de sortie introuvable dans les spans.")
+        log("[SKIP][SPOTIFY] Date de sortie introuvable dans les p tags.")
         return None
 
     year = int(release_date[:4])
@@ -357,92 +290,10 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
         "artists": [artist_name],
         "album_id": latest_album_id,
         "album_url": latest_album_url,
-        "release_type": release_type,
+        "release_type": "unknown",
         "release_year": year,
         "release_date": release_date,
     }
-
-
-def find_soundcharts_input(page):
-    selectors = [
-        "input[placeholder*='ISRC' i]",
-        "input[placeholder*='title' i]",
-        "input[placeholder*='artist' i]",
-        "input[name*='search' i]",
-        "input[type='search']",
-        "input[type='text']",
-    ]
-    for selector in selectors:
-        locator = page.locator(selector).first
-        try:
-            if locator.is_visible(timeout=1500):
-                return locator
-        except Exception:
-            pass
-    return None
-
-
-def find_soundcharts_button(page):
-    selectors = [
-        "button[type='submit']",
-        "input[type='submit']",
-        "button:has-text('Search')",
-        "button:has-text('search')",
-        "button[class*='search' i]",
-        "form button",
-    ]
-    for selector in selectors:
-        locator = page.locator(selector).first
-        try:
-            if locator.is_visible(timeout=1500):
-                return locator
-        except Exception:
-            pass
-    return None
-
-
-def search_soundcharts(page, project: Dict[str, Any]) -> Optional[str]:
-    query = f"{project['title']} {project['artists'][0]}".strip()
-    log(f"[SOUNDCHARTS] Recherche : {query}")
-
-    try:
-        page.goto(SOUNDCHARTS_URL, wait_until="domcontentloaded", timeout=120000)
-    except Exception as error:
-        log(f"[ERREUR][SOUNDCHARTS] Page inaccessible : {error}")
-        return None
-
-    search_input = find_soundcharts_input(page)
-    if search_input is None:
-        log("[ERREUR][SOUNDCHARTS] Champ de recherche introuvable.")
-        return None
-
-    try:
-        search_input.fill(query)
-    except Exception as error:
-        log(f"[ERREUR][SOUNDCHARTS] Impossible de remplir le champ : {error}")
-        return None
-
-    search_button = find_soundcharts_button(page)
-    if search_button is None:
-        log("[ERREUR][SOUNDCHARTS] Bouton de recherche introuvable.")
-        return None
-
-    try:
-        search_button.click()
-        page.wait_for_timeout(4000)
-    except Exception as error:
-        log(f"[ERREUR][SOUNDCHARTS] Impossible d’envoyer la recherche : {error}")
-        return None
-
-    rendered_html = page.content()
-    release_date = extract_release_date_from_html(rendered_html)
-
-    if release_date:
-        log(f"[SOUNDCHARTS] Date de sortie : {release_date}")
-    else:
-        log("[SOUNDCHARTS] Date de sortie introuvable.")
-
-    return release_date
 
 
 def release_already_exists(
@@ -479,7 +330,7 @@ def build_release_entry(
         "artist_name": artist.get("name", "Artiste inconnu"),
         "artist_id": artist.get("id", ""),
         "album_name": project.get("title", ""),
-        "release_type": project.get("release_type", "single"),
+        "release_type": project.get("release_type", "unknown"),
         "release_date": release_date,
         "album_image": "",
         "url": project.get("album_url", ""),
@@ -488,7 +339,6 @@ def build_release_entry(
 
 def process_artist(
     spotify_page,
-    soundcharts_page,
     artist: Dict[str, Any],
     tracks: List[Dict[str, Any]],
     today: str,
@@ -498,10 +348,7 @@ def process_artist(
         log("[SKIP] Dernière sortie non éligible.")
         return
 
-    release_date = search_soundcharts(soundcharts_page, project)
-    if release_date is None:
-        log("[SKIP] Date introuvable dans Soundcharts.")
-        return
+    release_date = project["release_date"]
 
     if release_date != today:
         log(f"[INFO] Projet ignoré : {release_date} != {today}")
@@ -542,7 +389,6 @@ def main() -> None:
         context.set_default_navigation_timeout(120000)
 
         spotify_page = context.new_page()
-        soundcharts_page = context.new_page()
 
         try:
             for index, artist in enumerate(artists, start=1):
@@ -554,7 +400,6 @@ def main() -> None:
                 try:
                     process_artist(
                         spotify_page,
-                        soundcharts_page,
                         artist,
                         tracks,
                         today,
@@ -567,7 +412,6 @@ def main() -> None:
                     log("[INFO] Recréation du contexte navigateur.")
                     try:
                         spotify_page.close()
-                        soundcharts_page.close()
                         context.close()
                     except Exception:
                         pass
@@ -580,7 +424,6 @@ def main() -> None:
                     context.set_default_timeout(30000)
                     context.set_default_navigation_timeout(120000)
                     spotify_page = context.new_page()
-                    soundcharts_page = context.new_page()
 
                 time.sleep(random.uniform(1.5, 4.0))
 
