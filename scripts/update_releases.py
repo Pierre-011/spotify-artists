@@ -5,7 +5,7 @@ import time
 import random
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
@@ -165,34 +165,24 @@ def save_releases(data: Dict[str, Any]) -> None:
 
 def parse_date(value: str) -> Optional[str]:
     value = " ".join(value.strip().split())
-    numeric_formats = (
-        "%Y-%m-%d",
-        "%d/%m/%Y",
-        "%d-%m-%Y",
-        "%m/%d/%Y",
-        "%Y/%m/%d",
-    )
 
-    for date_format in numeric_formats:
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d"):
         try:
-            return datetime.strptime(value, date_format).strftime("%Y-%m-%d")
+            return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
         except ValueError:
-            continue
+            pass
 
     match = re.fullmatch(r"([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})", value)
     if not match:
         return None
 
     month_name = match.group(1).lower()
-    day_value = int(match.group(2))
-    year_value = int(match.group(3))
     month_value = ENGLISH_MONTHS.get(month_name)
-
     if month_value is None:
         return None
 
     try:
-        return date(year_value, month_value, day_value).isoformat()
+        return date(int(match.group(3)), month_value, int(match.group(2))).isoformat()
     except ValueError:
         return None
 
@@ -210,12 +200,7 @@ def extract_release_date_from_html(html: str) -> Optional[str]:
         script_text = script.get_text(" ", strip=True)
         if not script_text:
             continue
-
-        match = re.search(
-            r'"release_date"\s*:\s*"([^"]+)"',
-            script_text,
-            flags=re.IGNORECASE,
-        )
+        match = re.search(r'"release_date"\s*:\s*"([^"]+)"', script_text, flags=re.IGNORECASE)
         if match:
             parsed = parse_date(match.group(1))
             if parsed:
@@ -234,26 +219,21 @@ def extract_release_date_from_html(html: str) -> Optional[str]:
 def extract_release_type_from_html(html: str) -> Optional[str]:
     soup = BeautifulSoup(html, "html.parser")
 
-    meta = soup.find("meta", attrs={"property": "music:release_type"})
-    if meta and meta.get("content"):
-        value = meta["content"].strip().lower()
-        if value:
-            return value
-
-    for script in soup.find_all("script"):
-        script_text = script.get_text(" ", strip=True)
-        if not script_text:
+    spans = soup.find_all("span")
+    for span in spans:
+        text = " ".join(span.get_text(" ", strip=True).split())
+        if not text:
             continue
 
-        match = re.search(
-            r'"album_type"\s*:\s*"([^"]+)"',
-            script_text,
-            flags=re.IGNORECASE,
-        )
-        if match:
-            value = match.group(1).strip().lower()
-            if value:
-                return value
+        low = text.lower()
+        if re.search(r"\bsingle\b", low):
+            return "single"
+        if re.search(r"\balbum\b", low):
+            return "album"
+        if re.search(r"\bep\b", low):
+            return "ep"
+        if re.search(r"\bcompilation\b", low):
+            return "compilation"
 
     return None
 
@@ -322,11 +302,7 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
     log(f"[SPOTIFY] URL : {discography_url}")
 
     try:
-        page.goto(
-            discography_url,
-            wait_until="domcontentloaded",
-            timeout=120000,
-        )
+        page.goto(discography_url, wait_until="domcontentloaded", timeout=120000)
         page.wait_for_selector("a[href*='/album/']", timeout=15000)
     except PlaywrightTimeoutError:
         log("[WARN][SPOTIFY] Timeout de chargement.")
@@ -341,14 +317,20 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
 
     latest_album_url = album_links[0]
     latest_album_id = get_spotify_id(latest_album_url, "album")
-    title = get_album_title(page, latest_album_url) or artist_name
+
+    try:
+        page.goto(latest_album_url, wait_until="domcontentloaded", timeout=120000)
+        page.wait_for_timeout(3000)
+    except Exception as error:
+        log(f"[ERREUR][SPOTIFY] Impossible d’ouvrir la sortie : {error}")
+        return None
 
     html = page.content()
     release_type = extract_release_type_from_html(html)
     release_date = extract_release_date_from_html(html)
 
     if not release_type:
-        log("[SKIP][SPOTIFY] Type de sortie introuvable.")
+        log("[SKIP][SPOTIFY] Type de sortie introuvable dans les spans.")
         return None
 
     if release_type != "single":
@@ -364,7 +346,9 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
         log(f"[SKIP][SPOTIFY] Projet ignoré : année={year}.")
         return None
 
-    project = {
+    title = get_album_title(page, latest_album_url) or artist_name
+
+    return {
         "title": title,
         "artists": [artist_name],
         "album_id": latest_album_id,
@@ -373,14 +357,6 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
         "release_year": year,
         "release_date": release_date,
     }
-
-    log(f"[SPOTIFY] Dernière sortie : {title}")
-    log(f"[SPOTIFY] Type : {release_type}")
-    log(f"[SPOTIFY] Date : {release_date}")
-    log(f"[SPOTIFY] ID : {latest_album_id}")
-    log(f"[SPOTIFY] URL : {latest_album_url}")
-
-    return project
 
 
 def find_soundcharts_input(page):
@@ -422,10 +398,7 @@ def find_soundcharts_button(page):
 
 
 def search_soundcharts(page, project: Dict[str, Any]) -> Optional[str]:
-    title = project["title"]
-    artist_name = project["artists"][0]
-    query = f"{title} {artist_name}".strip()
-
+    query = f"{project['title']} {project['artists'][0]}".strip()
     log(f"[SOUNDCHARTS] Recherche : {query}")
 
     try:
