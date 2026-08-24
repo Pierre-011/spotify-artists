@@ -165,7 +165,6 @@ def save_releases(data: Dict[str, Any]) -> None:
 
 def parse_date(value: str) -> Optional[str]:
     value = " ".join(value.strip().split())
-
     for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d"):
         try:
             return datetime.strptime(value, fmt).strftime("%Y-%m-%d")
@@ -187,8 +186,42 @@ def parse_date(value: str) -> Optional[str]:
         return None
 
 
+def extract_release_type_from_html(html: str) -> Optional[str]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    for span in soup.find_all("span"):
+        text = " ".join(span.get_text(" ", strip=True).split())
+        if not text:
+            continue
+
+        low = text.lower()
+        if re.search(r"\bsingle\b", low):
+            return "single"
+        if re.search(r"\balbum\b", low):
+            return "album"
+        if re.search(r"\bep\b", low):
+            return "ep"
+        if re.search(r"\bcompilation\b", low):
+            return "compilation"
+
+    return None
+
+
 def extract_release_date_from_html(html: str) -> Optional[str]:
     soup = BeautifulSoup(html, "html.parser")
+
+    for span in soup.find_all("span"):
+        text = " ".join(span.get_text(" ", strip=True).split())
+        if not text:
+            continue
+
+        parsed = parse_date(text)
+        if parsed:
+            return parsed
+
+        m = re.search(r"\b(20\d{2})\b", text)
+        if m:
+            return f"{m.group(1)}-01-01"
 
     meta = soup.find("meta", attrs={"property": "music:release_date"})
     if meta and meta.get("content"):
@@ -205,35 +238,6 @@ def extract_release_date_from_html(html: str) -> Optional[str]:
             parsed = parse_date(match.group(1))
             if parsed:
                 return parsed
-
-    text = " ".join(soup.get_text(" ", strip=True).split())
-    match = re.search(r"\b(20\d{2})(?:-\d{2})?(?:-\d{2})?\b", text)
-    if match:
-        parsed = parse_date(match.group(0))
-        if parsed:
-            return parsed
-
-    return None
-
-
-def extract_release_type_from_html(html: str) -> Optional[str]:
-    soup = BeautifulSoup(html, "html.parser")
-
-    spans = soup.find_all("span")
-    for span in spans:
-        text = " ".join(span.get_text(" ", strip=True).split())
-        if not text:
-            continue
-
-        low = text.lower()
-        if re.search(r"\bsingle\b", low):
-            return "single"
-        if re.search(r"\balbum\b", low):
-            return "album"
-        if re.search(r"\bep\b", low):
-            return "ep"
-        if re.search(r"\bcompilation\b", low):
-            return "compilation"
 
     return None
 
@@ -338,7 +342,7 @@ def get_latest_spotify_project(page, artist: Dict[str, Any]) -> Optional[Dict[st
         return None
 
     if not release_date:
-        log("[SKIP][SPOTIFY] Date de sortie introuvable.")
+        log("[SKIP][SPOTIFY] Date de sortie introuvable dans les spans.")
         return None
 
     year = int(release_date[:4])
