@@ -3,16 +3,16 @@ import re
 import sys
 import time
 import random
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing as mp
 from datetime import date, datetime
 from pathlib import Path
+from queue import Empty
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright, Browser
+from playwright.sync_api import sync_playwright
 
 
 ROOT_DIR = Path.cwd()
@@ -27,14 +27,27 @@ SPOTIFY_USER_AGENT = (
 )
 
 # --- Réglages de performance -------------------------------------------
-# Nombre de contextes navigateur traités en parallèle.
-# Démarrer prudemment (3-5) et monter progressivement en surveillant
-# le taux d'échecs/blocages dans les logs avant d'augmenter.
+# Nombre de PROCESSUS traités en parallèle, chacun avec son propre
+# navigateur Playwright.
+#
+# IMPORTANT : Playwright sync API n'est PAS thread-safe (elle pilote sa
+# boucle asyncio interne via des greenlets liés à un seul thread). Un
+# ThreadPoolExecutor provoque des erreurs "cannot switch to a different
+# thread". Le parallélisme doit donc passer par des PROCESSUS séparés
+# (multiprocessing), chacun avec son propre interpréteur et sa propre
+# instance Playwright — jamais par des threads.
+#
+# Chaque worker lance un Chromium complet : reste raisonnable en mémoire
+# (2-4 sur un runner CI standard). Monte progressivement en observant les
+# WARN/ERREUR dans les logs.
 MAX_WORKERS = 2
 
-# Délai aléatoire (secondes) entre deux artistes traités par UN MÊME worker.
-# Le total de requêtes/seconde reste comparable à la version séquentielle
-# une fois divisé par le nombre de workers, donc on peut le resserrer un peu.
+# Nombre d'artistes traités avant de recréer le contexte navigateur
+# À L'INTÉRIEUR d'un même worker (évite l'accumulation mémoire sur de
+# longues chaînes de pages consultées par un seul processus).
+CONTEXT_RECYCLE_EVERY = 40
+
+# Délai aléatoire (secondes) entre deux artistes traités par un même worker.
 MIN_DELAY_PER_WORKER = 1.0
 MAX_DELAY_PER_WORKER = 2.5
 
@@ -42,23 +55,10 @@ MAX_DELAY_PER_WORKER = 2.5
 NETWORK_IDLE_TIMEOUT_MS = 15000
 # -------------------------------------------------------------------------
 
-# Verrou pour protéger l'écriture concurrente de sorties.json
-SAVE_LOCK = threading.Lock()
 
-# Compteurs partagés pour le résumé final
-STATS_LOCK = threading.Lock()
-STATS = {
-    "traités": 0,
-    "ajoutés": 0,
-    "ignorés": 0,
-    "erreurs": 0,
-}
-
-
-def log(message: str) -> None:
-    # flush=True + verrou implicite du GIL sur print() : suffisant pour des
-    # logs entrelacés mais lisibles depuis plusieurs threads.
-    print(message, flush=True)
+def log(message: str, worker_id: Optional[int] = None) -> None:
+    prefix = f"[W{worker_id}] " if worker_id is not None else ""
+    print(f"{prefix}{message}", flush=True)
 
 
 def normalize_url(value: Any) -> str:
@@ -199,19 +199,18 @@ def load_releases() -> Dict[str, Any]:
 
 
 def save_releases(data: Dict[str, Any]) -> None:
-    """Écriture protégée par verrou : plusieurs workers peuvent
-    appeler cette fonction en même temps, un seul écrit à la fois."""
+    """N'est appelée QUE depuis le processus principal (voir main()) :
+    un seul processus écrit sur disque, donc aucun verrou nécessaire."""
     RELEASES_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    with SAVE_LOCK:
-        with RELEASES_FILE.open("w", encoding="utf-8") as file:
-            json.dump(
-                data,
-                file,
-                ensure_ascii=False,
-                indent=2,
-            )
-            file.write("\n")
+    with RELEASES_FILE.open("w", encoding="utf-8") as file:
+        json.dump(
+            data,
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+        file.write("\n")
 
     log(f"[INFO] Fichier sauvegardé : {RELEASES_FILE}")
 
@@ -344,7 +343,10 @@ def parse_date_from_encore_element(element: Any) -> Optional[date]:
     return None
 
 
-def extract_release_date_from_html(html: str) -> Optional[date]:
+def extract_release_date_from_html(
+    html: str,
+    worker_id: Optional[int] = None,
+) -> Optional[date]:
     soup = BeautifulSoup(html, "html.parser")
 
     encore_elements = soup.select("[data-encore-id]")
@@ -357,7 +359,8 @@ def extract_release_date_from_html(html: str) -> Optional[date]:
             log(
                 "[DATE] Date trouvée dans "
                 f"data-encore-id='{encore_id}' : "
-                f"{parsed.isoformat()}"
+                f"{parsed.isoformat()}",
+                worker_id,
             )
             return parsed
 
@@ -378,7 +381,8 @@ def extract_release_date_from_html(html: str) -> Optional[date]:
         if parsed:
             log(
                 "[DATE] Date trouvée dans un élément "
-                f"Encore lié aux métadonnées : {parsed.isoformat()}"
+                f"Encore lié aux métadonnées : {parsed.isoformat()}",
+                worker_id,
             )
             return parsed
 
@@ -400,7 +404,10 @@ def extract_release_date_from_html(html: str) -> Optional[date]:
                 parsed = parse_date(element.get_text(" ", strip=True))
 
             if parsed:
-                log(f"[DATE] Date trouvée avec {selector}: {parsed.isoformat()}")
+                log(
+                    f"[DATE] Date trouvée avec {selector}: {parsed.isoformat()}",
+                    worker_id,
+                )
                 return parsed
 
     patterns = [
@@ -420,14 +427,20 @@ def extract_release_date_from_html(html: str) -> Optional[date]:
                 parsed = parse_date(match.group(1))
 
                 if parsed:
-                    log(f"[DATE] Date trouvée dans un script : {parsed.isoformat()}")
+                    log(
+                        f"[DATE] Date trouvée dans un script : {parsed.isoformat()}",
+                        worker_id,
+                    )
                     return parsed
 
     visible_text = soup.get_text(" ", strip=True)
     parsed = parse_date(visible_text)
 
     if parsed:
-        log(f"[DATE] Date trouvée dans le texte global : {parsed.isoformat()}")
+        log(
+            f"[DATE] Date trouvée dans le texte global : {parsed.isoformat()}",
+            worker_id,
+        )
         return parsed
 
     return None
@@ -509,35 +522,29 @@ def get_album_title(page, album_url: str) -> str:
     return ""
 
 
-def save_debug_html(html: str, artist_name: str) -> Path:
+def save_debug_html(html: str, artist_name: str, worker_id: int) -> Path:
     safe_name = re.sub(r"[^A-Za-z0-9À-ÿ_.-]+", "_", artist_name)
-    debug_file = ROOT_DIR / f"spotify_debug_{safe_name}.html"
+    debug_file = ROOT_DIR / f"spotify_debug_w{worker_id}_{safe_name}.html"
     debug_file.write_text(html, encoding="utf-8")
     return debug_file
 
 
-def wait_for_page_ready(page) -> None:
-    """Remplace les anciens `wait_for_timeout` fixes (3s / 5s) par des
-    attentes conditionnelles : on avance dès que le contenu et le réseau
-    sont prêts, au lieu d'attendre systématiquement un délai arbitraire.
-    """
+def wait_for_page_ready(page, worker_id: int) -> None:
+    """Attentes conditionnelles (au lieu de wait_for_timeout fixes) :
+    on avance dès que le contenu et le réseau sont prêts."""
     try:
         page.wait_for_selector(
             "main, h1, a[href*='/artist/'], a[href*='/album/']",
             timeout=30000,
         )
     except PlaywrightTimeoutError:
-        log("[WARN][SPOTIFY] Élément principal non détecté.")
+        log("[WARN][SPOTIFY] Élément principal non détecté.", worker_id)
 
     try:
         page.wait_for_selector("[data-encore-id]", timeout=30000)
     except PlaywrightTimeoutError:
-        log("[WARN][SPOTIFY] Aucun élément data-encore-id détecté.")
+        log("[WARN][SPOTIFY] Aucun élément data-encore-id détecté.", worker_id)
 
-    # "networkidle" : n'attend que le temps réellement nécessaire pour que
-    # le réseau se stabilise, au lieu d'un sleep fixe. Si la page reste
-    # active (polling, websockets...) au-delà du timeout, on continue
-    # quand même plutôt que de bloquer indéfiniment.
     try:
         page.wait_for_load_state(
             "networkidle",
@@ -550,12 +557,13 @@ def wait_for_page_ready(page) -> None:
 def get_latest_spotify_project(
     page,
     artist: Dict[str, Any],
+    worker_id: int,
 ) -> Optional[Dict[str, Any]]:
     artist_name = artist["name"]
     discography_url = build_discography_url(artist["url"])
 
-    log(f"[SPOTIFY] Artiste : {artist_name}")
-    log(f"[SPOTIFY] URL : {discography_url}")
+    log(f"[SPOTIFY] Artiste : {artist_name}", worker_id)
+    log(f"[SPOTIFY] URL : {discography_url}", worker_id)
 
     try:
         page.goto(
@@ -575,21 +583,21 @@ def get_latest_spotify_project(
             pass
 
     except PlaywrightTimeoutError:
-        log("[WARN][SPOTIFY] Timeout de chargement de la discographie.")
+        log("[WARN][SPOTIFY] Timeout de chargement de la discographie.", worker_id)
     except Exception as error:
-        log(f"[ERREUR][SPOTIFY] {error}")
+        log(f"[ERREUR][SPOTIFY] {error}", worker_id)
         return None
 
     album_links = extract_album_links(page)
 
     if not album_links:
-        log(f"[SPOTIFY] Aucun projet trouvé pour {artist_name}.")
+        log(f"[SPOTIFY] Aucun projet trouvé pour {artist_name}.", worker_id)
         return None
 
     latest_album_url = album_links[0]
     latest_album_id = get_spotify_id(latest_album_url, "album")
 
-    log(f"[SPOTIFY] Dernière sortie détectée : {latest_album_url}")
+    log(f"[SPOTIFY] Dernière sortie détectée : {latest_album_url}", worker_id)
 
     try:
         page.goto(
@@ -598,27 +606,27 @@ def get_latest_spotify_project(
             timeout=120000,
         )
 
-        wait_for_page_ready(page)
+        wait_for_page_ready(page, worker_id)
 
     except Exception as error:
-        log(f"[ERREUR][SPOTIFY] Impossible d'ouvrir la sortie : {error}")
+        log(f"[ERREUR][SPOTIFY] Impossible d'ouvrir la sortie : {error}", worker_id)
         return None
 
     html = page.content()
 
-    release_date = extract_release_date_from_html(html)
+    release_date = extract_release_date_from_html(html, worker_id)
 
     if release_date is None:
-        debug_file = save_debug_html(html, artist_name)
+        debug_file = save_debug_html(html, artist_name, worker_id)
 
         try:
             body_text = page.locator("body").inner_text(timeout=5000)
-            log(f"[DEBUG] Texte visible de la page : {body_text[:1000]}")
+            log(f"[DEBUG] Texte visible de la page : {body_text[:1000]}", worker_id)
         except Exception:
             pass
 
-        log("[SKIP][SPOTIFY] Date introuvable dans les éléments data-encore-id.")
-        log(f"[DEBUG] HTML sauvegardé dans : {debug_file}")
+        log("[SKIP][SPOTIFY] Date introuvable dans les éléments data-encore-id.", worker_id)
+        log(f"[DEBUG] HTML sauvegardé dans : {debug_file}", worker_id)
 
         return None
 
@@ -634,25 +642,20 @@ def get_latest_spotify_project(
     }
 
 
-def release_already_exists(
+def entry_already_exists(
     tracks: List[Dict[str, Any]],
-    project: Dict[str, Any],
-    artist: Dict[str, Any],
-    release_date: date,
+    entry: Dict[str, Any],
 ) -> bool:
-    album_id = project.get("album_id", "")
-    artist_id = artist.get("id", "")
-    title = project.get("title", "")
-    release_date_str = release_date.isoformat()
+    album_id = entry.get("id", "")
 
     for track in tracks:
         if album_id and track.get("id") == album_id:
             return True
 
         if (
-            track.get("artist_id") == artist_id
-            and track.get("album_name") == title
-            and track.get("release_date") == release_date_str
+            track.get("artist_id") == entry.get("artist_id")
+            and track.get("album_name") == entry.get("album_name")
+            and track.get("release_date") == entry.get("release_date")
         ):
             return True
 
@@ -679,7 +682,7 @@ def build_release_entry(
     }
 
 
-def create_browser_context(browser: Browser):
+def create_browser_context(browser):
     context = browser.new_context(
         locale="fr-FR",
         user_agent=SPOTIFY_USER_AGENT,
@@ -692,94 +695,107 @@ def create_browser_context(browser: Browser):
     return context
 
 
-def process_artist_in_worker(
-    browser: Browser,
-    artist: Dict[str, Any],
-    today: date,
-    tracks: List[Dict[str, Any]],
+def worker_main(
+    worker_id: int,
+    artists_chunk: List[Dict[str, Any]],
+    today_iso: str,
+    result_queue: "mp.Queue",
 ) -> None:
-    """Traite un artiste dans son propre contexte/page isolés, puis
-    sauvegarde immédiatement si une nouvelle sortie est trouvée.
-    `tracks` est partagé entre threads : protégé par SAVE_LOCK à l'écriture,
-    et on ne fait que des lectures/append dessus sous verrou également
-    pour éviter les races sur la déduplication.
+    """Fonction exécutée dans un PROCESSUS séparé. Chaque worker possède
+    son propre interpréteur Python et sa propre instance Playwright —
+    c'est ce qui rend le parallélisme possible sans toucher aux
+    limitations thread-safety de l'API sync de Playwright.
+
+    Ne touche jamais au disque directement : tout résultat est envoyé
+    au processus principal via `result_queue`, qui centralise l'écriture
+    de sorties.json.
     """
-    context = create_browser_context(browser)
-    page = context.new_page()
+    today = date.fromisoformat(today_iso)
 
-    try:
-        project = get_latest_spotify_project(page, artist)
+    log(f"[INFO] Démarrage, {len(artists_chunk)} artiste(s) à traiter.", worker_id)
 
-        if project is None:
-            log("[SKIP] Dernière sortie non éligible.")
-            with STATS_LOCK:
-                STATS["ignorés"] += 1
-            return
-
-        release_date = project["release_date"]
-
-        if release_date != today:
-            log(
-                "[INFO] Projet ignoré : "
-                f"{release_date.isoformat()} != {today.isoformat()}"
-            )
-            with STATS_LOCK:
-                STATS["ignorés"] += 1
-            return
-
-        with SAVE_LOCK:
-            if release_already_exists(tracks, project, artist, release_date):
-                log("[INFO] Projet déjà présent dans sorties.json.")
-                already_present = True
-            else:
-                entry = build_release_entry(artist, project, release_date)
-                tracks.append(entry)
-                already_present = False
-
-        if already_present:
-            with STATS_LOCK:
-                STATS["ignorés"] += 1
-            return
-
-        # Sauvegarde sur disque hors du verrou de lecture ci-dessus,
-        # save_releases prend elle-même SAVE_LOCK pour l'écriture fichier.
-        save_releases({"tracks": tracks})
-
-        log(f"[SUCCÈS] Sortie ajoutée : {entry['album_name']} — {entry['artist_name']}")
-
-        with STATS_LOCK:
-            STATS["ajoutés"] += 1
-
-    except Exception as error:
-        log(f"[ERREUR ARTISTE] {artist['name']} : {error}")
-        with STATS_LOCK:
-            STATS["erreurs"] += 1
-
-    finally:
-        with STATS_LOCK:
-            STATS["traités"] += 1
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        context = create_browser_context(browser)
+        page = context.new_page()
 
         try:
-            page.close()
-        except Exception:
-            pass
+            for index, artist in enumerate(artists_chunk, start=1):
+                try:
+                    project = get_latest_spotify_project(page, artist, worker_id)
 
-        try:
-            context.close()
-        except Exception:
-            pass
+                    if project is None:
+                        result_queue.put(("skip", worker_id, artist["name"], "aucun projet éligible"))
+                    else:
+                        release_date = project["release_date"]
 
-        # Délai aléatoire par worker : réparti sur plusieurs workers,
-        # le débit global de requêtes/seconde reste raisonnable tout en
-        # étant nettement plus rapide qu'un unique worker séquentiel.
-        time.sleep(random.uniform(MIN_DELAY_PER_WORKER, MAX_DELAY_PER_WORKER))
+                        if release_date != today:
+                            result_queue.put((
+                                "skip",
+                                worker_id,
+                                artist["name"],
+                                f"{release_date.isoformat()} != {today.isoformat()}",
+                            ))
+                        else:
+                            entry = build_release_entry(artist, project, release_date)
+                            result_queue.put(("release", worker_id, entry))
+
+                except Exception as error:
+                    log(f"[ERREUR ARTISTE] {artist['name']} : {error}", worker_id)
+                    result_queue.put(("error", worker_id, artist["name"], str(error)))
+
+                if index % CONTEXT_RECYCLE_EVERY == 0 and index != len(artists_chunk):
+                    log("[INFO] Recréation du contexte navigateur.", worker_id)
+
+                    try:
+                        page.close()
+                    except Exception:
+                        pass
+
+                    try:
+                        context.close()
+                    except Exception:
+                        pass
+
+                    context = create_browser_context(browser)
+                    page = context.new_page()
+
+                time.sleep(random.uniform(MIN_DELAY_PER_WORKER, MAX_DELAY_PER_WORKER))
+
+        finally:
+            try:
+                page.close()
+            except Exception:
+                pass
+
+            try:
+                context.close()
+            except Exception:
+                pass
+
+            browser.close()
+
+    result_queue.put(("worker_done", worker_id, None))
+    log("[INFO] Terminé.", worker_id)
+
+
+def split_round_robin(
+    items: List[Dict[str, Any]],
+    n_buckets: int,
+) -> List[List[Dict[str, Any]]]:
+    buckets: List[List[Dict[str, Any]]] = [[] for _ in range(n_buckets)]
+
+    for index, item in enumerate(items):
+        buckets[index % n_buckets].append(item)
+
+    return buckets
 
 
 def main() -> None:
     today = date.today()
 
     log("=" * 70)
-    log("[DÉMARRAGE] Mise à jour des sorties (mode parallèle)")
+    log("[DÉMARRAGE] Mise à jour des sorties (mode multiprocessus)")
     log(f"[DÉMARRAGE] Date du jour : {today.isoformat()}")
     log(f"[DÉMARRAGE] Workers : {MAX_WORKERS}")
     log("=" * 70)
@@ -790,36 +806,91 @@ def main() -> None:
 
     log(f"[INFO] Artistes à traiter : {len(artists)}")
 
+    stats = {"traités": 0, "ajoutés": 0, "ignorés": 0, "erreurs": 0}
+
+    n_workers = min(MAX_WORKERS, len(artists)) or 1
+    chunks = split_round_robin(artists, n_workers)
+
+    result_queue: mp.Queue = mp.Queue()
+
+    processes: List[mp.Process] = []
+
     start_time = time.monotonic()
 
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+    for worker_id, chunk in enumerate(chunks, start=1):
+        if not chunk:
+            continue
 
+        process = mp.Process(
+            target=worker_main,
+            args=(worker_id, chunk, today.isoformat(), result_queue),
+            daemon=True,
+        )
+        process.start()
+        processes.append(process)
+
+    workers_remaining = len(processes)
+    progress_counter = 0
+
+    # Boucle de consommation : le processus principal est le SEUL à écrire
+    # sur disque, donc aucun verrou n'est nécessaire ici.
+    while workers_remaining > 0:
         try:
-            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-                futures = [
-                    executor.submit(
-                        process_artist_in_worker,
-                        browser,
-                        artist,
-                        today,
-                        tracks,
-                    )
-                    for artist in artists
-                ]
+            message = result_queue.get(timeout=300)
+        except Empty:
+            log("[WARN] Aucun résultat reçu depuis 5 minutes, vérification des workers...")
 
-                for index, future in enumerate(as_completed(futures), start=1):
-                    # Les exceptions sont déjà interceptées dans le worker ;
-                    # ce .result() ne fait que propager un éventuel bug
-                    # inattendu du framework lui-même.
-                    future.result()
+            if all(not process.is_alive() for process in processes):
+                log("[WARN] Tous les workers sont arrêtés, fin de la boucle.")
+                break
 
-                    if index % 25 == 0:
-                        log(f"[PROGRESSION] {index}/{len(artists)} artistes traités.")
+            continue
 
-        finally:
-            browser.close()
-            log("[INFO] Navigateur fermé.")
+        kind = message[0]
+
+        if kind == "worker_done":
+            workers_remaining -= 1
+            continue
+
+        if kind == "skip":
+            _, worker_id, artist_name, reason = message
+            log(f"[INFO] Projet ignoré ({artist_name}) : {reason}", worker_id)
+            stats["ignorés"] += 1
+
+        elif kind == "error":
+            _, worker_id, artist_name, error_text = message
+            stats["erreurs"] += 1
+
+        elif kind == "release":
+            _, worker_id, entry = message
+
+            if entry_already_exists(tracks, entry):
+                log(
+                    f"[INFO] Projet déjà présent dans sorties.json : {entry['album_name']}",
+                    worker_id,
+                )
+                stats["ignorés"] += 1
+            else:
+                tracks.append(entry)
+                save_releases({"tracks": tracks})
+                log(
+                    f"[SUCCÈS] Sortie ajoutée : {entry['album_name']} — {entry['artist_name']}",
+                    worker_id,
+                )
+                stats["ajoutés"] += 1
+
+        stats["traités"] += 1
+        progress_counter += 1
+
+        if progress_counter % 25 == 0:
+            log(f"[PROGRESSION] {progress_counter}/{len(artists)} artistes traités.")
+
+    for process in processes:
+        process.join(timeout=30)
+
+        if process.is_alive():
+            log(f"[WARN] Le processus {process.pid} ne s'est pas terminé proprement, arrêt forcé.")
+            process.terminate()
 
     elapsed = time.monotonic() - start_time
 
@@ -828,8 +899,8 @@ def main() -> None:
     log(f"[FIN] Total de sorties : {len(tracks)}")
     log(
         "[FIN] Traités : "
-        f"{STATS['traités']} | Ajoutés : {STATS['ajoutés']} | "
-        f"Ignorés : {STATS['ignorés']} | Erreurs : {STATS['erreurs']}"
+        f"{stats['traités']} | Ajoutés : {stats['ajoutés']} | "
+        f"Ignorés : {stats['ignorés']} | Erreurs : {stats['erreurs']}"
     )
     log(f"[FIN] Durée totale : {elapsed:.1f}s ({elapsed / 60:.1f} min)")
     log("=" * 70)
