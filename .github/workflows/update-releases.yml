@@ -1,45 +1,39 @@
 name: Mise à jour des sorties
-
 on:
   schedule:
     - cron: "30 0 * * *"
       timezone: "Europe/Paris"
-
   workflow_dispatch:
-
 permissions:
   contents: write
-
 concurrency:
   group: update-releases
   cancel-in-progress: false
-
 jobs:
   update:
-    name: Vérifier les sorties musicales
+    name: Vérifier les sorties musicales (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
     steps:
       - name: Récupérer le dépôt
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
       - name: Installer Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-
       - name: Installer les dépendances Python
         run: |
           python -m pip install --upgrade pip
           python -m pip install playwright beautifulsoup4
-
       - name: Installer Chromium pour Playwright
         run: |
           python -m playwright install --with-deps chromium
-
       - name: Vérifier la structure du dépôt
         run: |
           echo "Répertoire courant : $(pwd)"
@@ -49,13 +43,51 @@ jobs:
           ls -la scripts
           test -f data/artistes.json
           test -f scripts/update_releases.py
+      - name: Mettre à jour les sorties (shard ${{ matrix.shard }}/5)
+        env:
+          PYTHONUNBUFFERED: "1"
+          SHARD_INDEX: ${{ matrix.shard }}
+          SHARD_TOTAL: 5
+        run: |
+          python -u scripts/update_releases.py
+      - name: Publier le résultat du shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: sorties-shard-${{ matrix.shard }}
+          path: data/shards/sorties_shard_${{ matrix.shard }}.json
+          if-no-files-found: ignore
+          retention-days: 1
 
-      - name: Mettre à jour les sorties
+  merge:
+    name: Fusionner les shards et publier
+    needs: update
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: always()
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Installer Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Télécharger tous les shards
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sorties-shard-*
+          path: data/shards
+          merge-multiple: true
+      - name: Vérifier les shards téléchargés
+        run: |
+          echo "Contenu de data/shards :"
+          ls -la data/shards || echo "Aucun shard reçu."
+      - name: Fusionner les shards dans sorties.json
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          python -u scripts/update_releases.py
-
+          python -u scripts/merge_shards.py
       - name: Vérifier les modifications
         id: changes
         shell: bash
@@ -68,13 +100,11 @@ jobs:
             echo "Modification de data/sorties.json détectée."
             git diff --stat -- data/sorties.json
           fi
-
       - name: Enregistrer les nouvelles sorties
         if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add data/sorties.json
           git commit -m "Mise à jour des sorties"
           git push
