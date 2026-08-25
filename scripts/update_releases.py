@@ -3,6 +3,8 @@ import re
 import sys
 import time
 import random
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,7 +12,7 @@ from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, Browser
 
 
 ROOT_DIR = Path.cwd()
@@ -24,8 +26,38 @@ SPOTIFY_USER_AGENT = (
     "Chrome/131.0.0.0 Safari/537.36"
 )
 
+# --- Réglages de performance -------------------------------------------
+# Nombre de contextes navigateur traités en parallèle.
+# Démarrer prudemment (3-5) et monter progressivement en surveillant
+# le taux d'échecs/blocages dans les logs avant d'augmenter.
+MAX_WORKERS = 2
+
+# Délai aléatoire (secondes) entre deux artistes traités par UN MÊME worker.
+# Le total de requêtes/seconde reste comparable à la version séquentielle
+# une fois divisé par le nombre de workers, donc on peut le resserrer un peu.
+MIN_DELAY_PER_WORKER = 1.0
+MAX_DELAY_PER_WORKER = 2.5
+
+# Timeout réseau "idle" utilisé à la place des attentes fixes.
+NETWORK_IDLE_TIMEOUT_MS = 15000
+# -------------------------------------------------------------------------
+
+# Verrou pour protéger l'écriture concurrente de sorties.json
+SAVE_LOCK = threading.Lock()
+
+# Compteurs partagés pour le résumé final
+STATS_LOCK = threading.Lock()
+STATS = {
+    "traités": 0,
+    "ajoutés": 0,
+    "ignorés": 0,
+    "erreurs": 0,
+}
+
 
 def log(message: str) -> None:
+    # flush=True + verrou implicite du GIL sur print() : suffisant pour des
+    # logs entrelacés mais lisibles depuis plusieurs threads.
     print(message, flush=True)
 
 
@@ -167,43 +199,31 @@ def load_releases() -> Dict[str, Any]:
 
 
 def save_releases(data: Dict[str, Any]) -> None:
+    """Écriture protégée par verrou : plusieurs workers peuvent
+    appeler cette fonction en même temps, un seul écrit à la fois."""
     RELEASES_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    with RELEASES_FILE.open("w", encoding="utf-8") as file:
-        json.dump(
-            data,
-            file,
-            ensure_ascii=False,
-            indent=2,
-        )
-        file.write("\n")
+    with SAVE_LOCK:
+        with RELEASES_FILE.open("w", encoding="utf-8") as file:
+            json.dump(
+                data,
+                file,
+                ensure_ascii=False,
+                indent=2,
+            )
+            file.write("\n")
 
     log(f"[INFO] Fichier sauvegardé : {RELEASES_FILE}")
 
 
 def parse_date(value: str) -> Optional[date]:
-    """Parse une date Spotify en français ou en anglais.
-
-    Formats pris en charge notamment :
-    - 2026-08-07
-    - 07/08/2026
-    - 07-08-2026
-    - 08/07/2026
-    - August 7, 2026
-    - August 7 2026
-    - 7 August 2026
-    - 7 août 2026
-    - 7 aout 2026
-    - 7 août 2026 avec espace insécable
-    """
+    """Parse une date Spotify en français ou en anglais."""
     if not value:
         return None
 
     value = " ".join(str(value).strip().split())
     value = value.replace("\u00a0", " ")
 
-    # Normalisation légère pour pouvoir reconnaître les accents français
-    # (août -> aout, février -> fevrier, décembre -> decembre, etc.).
     import unicodedata
 
     normalized = unicodedata.normalize("NFD", value)
@@ -212,7 +232,6 @@ def parse_date(value: str) -> Optional[date]:
         if unicodedata.category(char) != "Mn"
     )
 
-    # Format ISO : 2026-08-24 / 2026/08/24
     match = re.search(
         r"\b((?:19|20)\d{2})[-/](\d{1,2})[-/](\d{1,2})\b",
         normalized,
@@ -228,8 +247,6 @@ def parse_date(value: str) -> Optional[date]:
         except ValueError:
             return None
 
-    # Formats numériques.
-    # On conserve l'ordre existant : DD/MM/YYYY avant MM/DD/YYYY.
     for fmt in (
         "%d/%m/%Y",
         "%d-%m-%Y",
@@ -241,55 +258,20 @@ def parse_date(value: str) -> Optional[date]:
         except ValueError:
             pass
 
-    # Mois anglais + français.
     months = {
-        # Anglais
-        "january": 1,
-        "jan": 1,
-        "february": 2,
-        "feb": 2,
-        "march": 3,
-        "mar": 3,
-        "april": 4,
-        "apr": 4,
-        "may": 5,
-        "june": 6,
-        "jun": 6,
-        "july": 7,
-        "jul": 7,
-        "august": 8,
-        "aug": 8,
-        "september": 9,
-        "sep": 9,
-        "sept": 9,
-        "october": 10,
-        "oct": 10,
-        "november": 11,
-        "nov": 11,
-        "december": 12,
-        "dec": 12,
-
-        # Français (sans accents car `normalized` les retire)
-        "janvier": 1,
-        "janv": 1,
-        "fevrier": 2,
-        "fevr": 2,
-        "fev": 2,
-        "mars": 3,
-        "avril": 4,
-        "avr": 4,
-        "mai": 5,
-        "juin": 6,
-        "juillet": 7,
-        "juil": 7,
-        "aout": 8,
-        "septembre": 9,
-        "octobre": 10,
-        "novembre": 11,
+        "january": 1, "jan": 1, "february": 2, "feb": 2,
+        "march": 3, "mar": 3, "april": 4, "apr": 4,
+        "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+        "august": 8, "aug": 8, "september": 9, "sep": 9,
+        "sept": 9, "october": 10, "oct": 10, "november": 11,
+        "nov": 11, "december": 12, "dec": 12,
+        "janvier": 1, "janv": 1, "fevrier": 2, "fevr": 2,
+        "fev": 2, "mars": 3, "avril": 4, "avr": 4, "mai": 5,
+        "juin": 6, "juillet": 7, "juil": 7, "aout": 8,
+        "septembre": 9, "octobre": 10, "novembre": 11,
         "decembre": 12,
     }
 
-    # Format anglais : August 24, 2026 / August 24 2026
     match = re.search(
         r"\b([A-Za-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+"
         r"((?:19|20)\d{2})\b",
@@ -310,7 +292,6 @@ def parse_date(value: str) -> Optional[date]:
             except ValueError:
                 return None
 
-    # Format français : 7 août 2026 / 1er août 2026
     match = re.search(
         r"\b(\d{1,2})(?:er)?\s+([A-Za-z]+)\s+"
         r"((?:19|20)\d{2})\b",
@@ -334,19 +315,7 @@ def parse_date(value: str) -> Optional[date]:
     return None
 
 
-def parse_date_from_encore_element(
-    element: Any,
-) -> Optional[date]:
-    """
-    Analyse un élément ayant data-encore-id.
-
-    La date peut se trouver :
-    - dans le texte de l'élément ;
-    - dans son HTML interne ;
-    - dans ses attributs ;
-    - dans un élément enfant.
-    """
-
+def parse_date_from_encore_element(element: Any) -> Optional[date]:
     values: List[str] = []
 
     try:
@@ -362,10 +331,7 @@ def parse_date_from_encore_element(
     if hasattr(element, "attrs"):
         for attribute_value in element.attrs.values():
             if isinstance(attribute_value, list):
-                values.extend(
-                    str(item)
-                    for item in attribute_value
-                )
+                values.extend(str(item) for item in attribute_value)
             else:
                 values.append(str(attribute_value))
 
@@ -378,27 +344,13 @@ def parse_date_from_encore_element(
     return None
 
 
-def extract_release_date_from_html(
-    html: str,
-) -> Optional[date]:
-    """
-    Recherche prioritairement les éléments Spotify
-    utilisant data-encore-id.
-    """
-
+def extract_release_date_from_html(html: str) -> Optional[date]:
     soup = BeautifulSoup(html, "html.parser")
 
     encore_elements = soup.select("[data-encore-id]")
 
-    log(
-        f"[DEBUG] Éléments data-encore-id trouvés : "
-        f"{len(encore_elements)}"
-    )
-
-    # Recherche prioritaire dans data-encore-id
     for element in encore_elements:
         encore_id = element.get("data-encore-id", "")
-
         parsed = parse_date_from_encore_element(element)
 
         if parsed:
@@ -409,12 +361,9 @@ def extract_release_date_from_html(
             )
             return parsed
 
-    # Recherche dans les éléments contenant un identifiant Encore
-    # associé à la date ou à la sortie
     for element in soup.find_all(True):
         attributes_text = " ".join(
-            f"{key}={value}"
-            for key, value in element.attrs.items()
+            f"{key}={value}" for key, value in element.attrs.items()
         )
 
         if not re.search(
@@ -429,12 +378,10 @@ def extract_release_date_from_html(
         if parsed:
             log(
                 "[DATE] Date trouvée dans un élément "
-                "Encore lié aux métadonnées : "
-                f"{parsed.isoformat()}"
+                f"Encore lié aux métadonnées : {parsed.isoformat()}"
             )
             return parsed
 
-    # Fallback : métadonnées HTML
     metadata_selectors = [
         ("time", "datetime"),
         ("meta[property='music:release_date']", "content"),
@@ -450,18 +397,12 @@ def extract_release_date_from_html(
             parsed = parse_date(value)
 
             if not parsed:
-                parsed = parse_date(
-                    element.get_text(" ", strip=True)
-                )
+                parsed = parse_date(element.get_text(" ", strip=True))
 
             if parsed:
-                log(
-                    f"[DATE] Date trouvée avec {selector}: "
-                    f"{parsed.isoformat()}"
-                )
+                log(f"[DATE] Date trouvée avec {selector}: {parsed.isoformat()}")
                 return parsed
 
-    # Fallback : scripts JSON/JavaScript
     patterns = [
         r'"release_date"\s*:\s*"([^"]+)"',
         r'"releaseDate"\s*:\s*"([^"]+)"',
@@ -475,29 +416,18 @@ def extract_release_date_from_html(
             continue
 
         for pattern in patterns:
-            for match in re.finditer(
-                pattern,
-                raw,
-                flags=re.IGNORECASE,
-            ):
+            for match in re.finditer(pattern, raw, flags=re.IGNORECASE):
                 parsed = parse_date(match.group(1))
 
                 if parsed:
-                    log(
-                        "[DATE] Date trouvée dans un script : "
-                        f"{parsed.isoformat()}"
-                    )
+                    log(f"[DATE] Date trouvée dans un script : {parsed.isoformat()}")
                     return parsed
 
-    # Dernier fallback : texte global de la page
     visible_text = soup.get_text(" ", strip=True)
     parsed = parse_date(visible_text)
 
     if parsed:
-        log(
-            "[DATE] Date trouvée dans le texte global : "
-            f"{parsed.isoformat()}"
-        )
+        log(f"[DATE] Date trouvée dans le texte global : {parsed.isoformat()}")
         return parsed
 
     return None
@@ -534,9 +464,7 @@ def extract_album_links(page) -> List[str]:
             continue
 
         album_id = match.group(1)
-        canonical_url = (
-            f"https://open.spotify.com/album/{album_id}"
-        )
+        canonical_url = f"https://open.spotify.com/album/{album_id}"
 
         if canonical_url not in links:
             links.append(canonical_url)
@@ -544,10 +472,7 @@ def extract_album_links(page) -> List[str]:
     return links
 
 
-def get_album_title(
-    page,
-    album_url: str,
-) -> str:
+def get_album_title(page, album_url: str) -> str:
     album_id = get_spotify_id(album_url, "album")
 
     anchors = page.locator("a[href*='/album/']")
@@ -574,9 +499,7 @@ def get_album_title(
         headings = page.locator("h1")
 
         if headings.count() > 0:
-            title = headings.first.inner_text(
-                timeout=3000
-            ).strip()
+            title = headings.first.inner_text(timeout=3000).strip()
 
             if title:
                 return " ".join(title.split())
@@ -586,52 +509,42 @@ def get_album_title(
     return ""
 
 
-def save_debug_html(
-    html: str,
-    artist_name: str,
-) -> Path:
-    safe_name = re.sub(
-        r"[^A-Za-z0-9À-ÿ_.-]+",
-        "_",
-        artist_name,
-    )
-
-    debug_file = ROOT_DIR / (
-        f"spotify_debug_{safe_name}.html"
-    )
-
-    debug_file.write_text(
-        html,
-        encoding="utf-8",
-    )
-
+def save_debug_html(html: str, artist_name: str) -> Path:
+    safe_name = re.sub(r"[^A-Za-z0-9À-ÿ_.-]+", "_", artist_name)
+    debug_file = ROOT_DIR / f"spotify_debug_{safe_name}.html"
+    debug_file.write_text(html, encoding="utf-8")
     return debug_file
 
 
-def wait_for_page_content(page) -> None:
+def wait_for_page_ready(page) -> None:
+    """Remplace les anciens `wait_for_timeout` fixes (3s / 5s) par des
+    attentes conditionnelles : on avance dès que le contenu et le réseau
+    sont prêts, au lieu d'attendre systématiquement un délai arbitraire.
+    """
     try:
         page.wait_for_selector(
-            "main, h1, a[href*='/artist/']",
+            "main, h1, a[href*='/artist/'], a[href*='/album/']",
             timeout=30000,
         )
     except PlaywrightTimeoutError:
-        log(
-            "[WARN][SPOTIFY] Élément principal "
-            "non détecté."
-        )
+        log("[WARN][SPOTIFY] Élément principal non détecté.")
 
     try:
-        page.wait_for_selector(
-            "[data-encore-id]",
-            timeout=30000,
+        page.wait_for_selector("[data-encore-id]", timeout=30000)
+    except PlaywrightTimeoutError:
+        log("[WARN][SPOTIFY] Aucun élément data-encore-id détecté.")
+
+    # "networkidle" : n'attend que le temps réellement nécessaire pour que
+    # le réseau se stabilise, au lieu d'un sleep fixe. Si la page reste
+    # active (polling, websockets...) au-delà du timeout, on continue
+    # quand même plutôt que de bloquer indéfiniment.
+    try:
+        page.wait_for_load_state(
+            "networkidle",
+            timeout=NETWORK_IDLE_TIMEOUT_MS,
         )
     except PlaywrightTimeoutError:
-        log(
-            "[WARN][SPOTIFY] Aucun élément "
-            "data-encore-id détecté."
-        )
-
-    page.wait_for_timeout(5000)
+        pass
 
 
 def get_latest_spotify_project(
@@ -651,18 +564,18 @@ def get_latest_spotify_project(
             timeout=120000,
         )
 
-        page.wait_for_selector(
-            "a[href*='/album/']",
-            timeout=30000,
-        )
+        page.wait_for_selector("a[href*='/album/']", timeout=30000)
 
-        page.wait_for_timeout(3000)
+        try:
+            page.wait_for_load_state(
+                "networkidle",
+                timeout=NETWORK_IDLE_TIMEOUT_MS,
+            )
+        except PlaywrightTimeoutError:
+            pass
 
     except PlaywrightTimeoutError:
-        log(
-            "[WARN][SPOTIFY] Timeout de chargement "
-            "de la discographie."
-        )
+        log("[WARN][SPOTIFY] Timeout de chargement de la discographie.")
     except Exception as error:
         log(f"[ERREUR][SPOTIFY] {error}")
         return None
@@ -670,24 +583,13 @@ def get_latest_spotify_project(
     album_links = extract_album_links(page)
 
     if not album_links:
-        log(
-            f"[SPOTIFY] Aucun projet trouvé "
-            f"pour {artist_name}."
-        )
+        log(f"[SPOTIFY] Aucun projet trouvé pour {artist_name}.")
         return None
 
-    # La première sortie affichée par Spotify est utilisée
-    # comme dernière sortie de l'artiste.
     latest_album_url = album_links[0]
-    latest_album_id = get_spotify_id(
-        latest_album_url,
-        "album",
-    )
+    latest_album_id = get_spotify_id(latest_album_url, "album")
 
-    log(
-        "[SPOTIFY] Dernière sortie détectée : "
-        f"{latest_album_url}"
-    )
+    log(f"[SPOTIFY] Dernière sortie détectée : {latest_album_url}")
 
     try:
         page.goto(
@@ -696,13 +598,10 @@ def get_latest_spotify_project(
             timeout=120000,
         )
 
-        wait_for_page_content(page)
+        wait_for_page_ready(page)
 
     except Exception as error:
-        log(
-            "[ERREUR][SPOTIFY] Impossible d’ouvrir "
-            f"la sortie : {error}"
-        )
+        log(f"[ERREUR][SPOTIFY] Impossible d'ouvrir la sortie : {error}")
         return None
 
     html = page.content()
@@ -710,38 +609,20 @@ def get_latest_spotify_project(
     release_date = extract_release_date_from_html(html)
 
     if release_date is None:
-        debug_file = save_debug_html(
-            html,
-            artist_name,
-        )
+        debug_file = save_debug_html(html, artist_name)
 
         try:
-            body_text = page.locator(
-                "body"
-            ).inner_text(timeout=5000)
-
-            log(
-                "[DEBUG] Texte visible de la page : "
-                f"{body_text[:1000]}"
-            )
+            body_text = page.locator("body").inner_text(timeout=5000)
+            log(f"[DEBUG] Texte visible de la page : {body_text[:1000]}")
         except Exception:
             pass
 
-        log(
-            "[SKIP][SPOTIFY] Date introuvable dans "
-            "les éléments data-encore-id."
-        )
-        log(
-            f"[DEBUG] HTML sauvegardé dans : "
-            f"{debug_file}"
-        )
+        log("[SKIP][SPOTIFY] Date introuvable dans les éléments data-encore-id.")
+        log(f"[DEBUG] HTML sauvegardé dans : {debug_file}")
 
         return None
 
-    title = get_album_title(
-        page,
-        latest_album_url,
-    ) or artist_name
+    title = get_album_title(page, latest_album_url) or artist_name
 
     return {
         "title": title,
@@ -788,83 +669,21 @@ def build_release_entry(
     return {
         "id": project.get("album_id", ""),
         "name": project.get("title", ""),
-        "artist_name": artist.get(
-            "name",
-            "Artiste inconnu",
-        ),
+        "artist_name": artist.get("name", "Artiste inconnu"),
         "artist_id": artist.get("id", ""),
         "album_name": project.get("title", ""),
-        "release_type": project.get(
-            "release_type",
-            "unknown",
-        ),
+        "release_type": project.get("release_type", "unknown"),
         "release_date": release_date_str,
         "album_image": "",
         "url": project.get("album_url", ""),
     }
 
 
-def process_artist(
-    spotify_page,
-    artist: Dict[str, Any],
-    tracks: List[Dict[str, Any]],
-    today: date,
-) -> None:
-    project = get_latest_spotify_project(
-        spotify_page,
-        artist,
-    )
-
-    if project is None:
-        log("[SKIP] Dernière sortie non éligible.")
-        return
-
-    release_date = project["release_date"]
-
-    if release_date != today:
-        log(
-            "[INFO] Projet ignoré : "
-            f"{release_date.isoformat()} != "
-            f"{today.isoformat()}"
-        )
-        return
-
-    if release_already_exists(
-        tracks,
-        project,
-        artist,
-        release_date,
-    ):
-        log(
-            "[INFO] Projet déjà présent "
-            "dans sorties.json."
-        )
-        return
-
-    entry = build_release_entry(
-        artist,
-        project,
-        release_date,
-    )
-
-    tracks.append(entry)
-    save_releases({"tracks": tracks})
-
-    log(
-        "[SUCCÈS] Sortie ajoutée : "
-        f"{entry['album_name']} — "
-        f"{entry['artist_name']}"
-    )
-
-
-def create_browser_context(browser):
+def create_browser_context(browser: Browser):
     context = browser.new_context(
         locale="fr-FR",
         user_agent=SPOTIFY_USER_AGENT,
-        viewport={
-            "width": 1440,
-            "height": 1000,
-        },
+        viewport={"width": 1440, "height": 1000},
     )
 
     context.set_default_timeout(30000)
@@ -873,105 +692,146 @@ def create_browser_context(browser):
     return context
 
 
+def process_artist_in_worker(
+    browser: Browser,
+    artist: Dict[str, Any],
+    today: date,
+    tracks: List[Dict[str, Any]],
+) -> None:
+    """Traite un artiste dans son propre contexte/page isolés, puis
+    sauvegarde immédiatement si une nouvelle sortie est trouvée.
+    `tracks` est partagé entre threads : protégé par SAVE_LOCK à l'écriture,
+    et on ne fait que des lectures/append dessus sous verrou également
+    pour éviter les races sur la déduplication.
+    """
+    context = create_browser_context(browser)
+    page = context.new_page()
+
+    try:
+        project = get_latest_spotify_project(page, artist)
+
+        if project is None:
+            log("[SKIP] Dernière sortie non éligible.")
+            with STATS_LOCK:
+                STATS["ignorés"] += 1
+            return
+
+        release_date = project["release_date"]
+
+        if release_date != today:
+            log(
+                "[INFO] Projet ignoré : "
+                f"{release_date.isoformat()} != {today.isoformat()}"
+            )
+            with STATS_LOCK:
+                STATS["ignorés"] += 1
+            return
+
+        with SAVE_LOCK:
+            if release_already_exists(tracks, project, artist, release_date):
+                log("[INFO] Projet déjà présent dans sorties.json.")
+                already_present = True
+            else:
+                entry = build_release_entry(artist, project, release_date)
+                tracks.append(entry)
+                already_present = False
+
+        if already_present:
+            with STATS_LOCK:
+                STATS["ignorés"] += 1
+            return
+
+        # Sauvegarde sur disque hors du verrou de lecture ci-dessus,
+        # save_releases prend elle-même SAVE_LOCK pour l'écriture fichier.
+        save_releases({"tracks": tracks})
+
+        log(f"[SUCCÈS] Sortie ajoutée : {entry['album_name']} — {entry['artist_name']}")
+
+        with STATS_LOCK:
+            STATS["ajoutés"] += 1
+
+    except Exception as error:
+        log(f"[ERREUR ARTISTE] {artist['name']} : {error}")
+        with STATS_LOCK:
+            STATS["erreurs"] += 1
+
+    finally:
+        with STATS_LOCK:
+            STATS["traités"] += 1
+
+        try:
+            page.close()
+        except Exception:
+            pass
+
+        try:
+            context.close()
+        except Exception:
+            pass
+
+        # Délai aléatoire par worker : réparti sur plusieurs workers,
+        # le débit global de requêtes/seconde reste raisonnable tout en
+        # étant nettement plus rapide qu'un unique worker séquentiel.
+        time.sleep(random.uniform(MIN_DELAY_PER_WORKER, MAX_DELAY_PER_WORKER))
+
+
 def main() -> None:
     today = date.today()
 
     log("=" * 70)
-    log("[DÉMARRAGE] Mise à jour des sorties")
-    log(
-        f"[DÉMARRAGE] Date du jour : "
-        f"{today.isoformat()}"
-    )
+    log("[DÉMARRAGE] Mise à jour des sorties (mode parallèle)")
+    log(f"[DÉMARRAGE] Date du jour : {today.isoformat()}")
+    log(f"[DÉMARRAGE] Workers : {MAX_WORKERS}")
     log("=" * 70)
 
     artists = load_artists()
     releases_data = load_releases()
     tracks = releases_data["tracks"]
 
-    log(
-        f"[INFO] Artistes à traiter : "
-        f"{len(artists)}"
-    )
+    log(f"[INFO] Artistes à traiter : {len(artists)}")
+
+    start_time = time.monotonic()
 
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            headless=True,
-        )
-
-        context = create_browser_context(browser)
-        spotify_page = context.new_page()
+        browser = playwright.chromium.launch(headless=True)
 
         try:
-            for index, artist in enumerate(
-                artists,
-                start=1,
-            ):
-                log("")
-                log("=" * 70)
-                log(
-                    f"[ARTISTE {index}/{len(artists)}] "
-                    f"{artist['name']}"
-                )
-                log("=" * 70)
-
-                try:
-                    process_artist(
-                        spotify_page,
-                        artist,
-                        tracks,
-                        today,
-                    )
-                except Exception as error:
-                    log(
-                        f"[ERREUR ARTISTE] "
-                        f"{artist['name']} : {error}"
-                    )
-
-                if index % 75 == 0:
-                    log(
-                        "[INFO] Recréation du "
-                        "contexte navigateur."
-                    )
-
-                    try:
-                        spotify_page.close()
-                    except Exception:
-                        pass
-
-                    try:
-                        context.close()
-                    except Exception:
-                        pass
-
-                    context = create_browser_context(
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                futures = [
+                    executor.submit(
+                        process_artist_in_worker,
                         browser,
+                        artist,
+                        today,
+                        tracks,
                     )
-                    spotify_page = context.new_page()
+                    for artist in artists
+                ]
 
-                time.sleep(
-                    random.uniform(1.5, 4.0)
-                )
+                for index, future in enumerate(as_completed(futures), start=1):
+                    # Les exceptions sont déjà interceptées dans le worker ;
+                    # ce .result() ne fait que propager un éventuel bug
+                    # inattendu du framework lui-même.
+                    future.result()
+
+                    if index % 25 == 0:
+                        log(f"[PROGRESSION] {index}/{len(artists)} artistes traités.")
 
         finally:
-            try:
-                spotify_page.close()
-            except Exception:
-                pass
-
-            try:
-                context.close()
-            except Exception:
-                pass
-
             browser.close()
             log("[INFO] Navigateur fermé.")
 
+    elapsed = time.monotonic() - start_time
+
     log("")
     log("=" * 70)
+    log(f"[FIN] Total de sorties : {len(tracks)}")
     log(
-        f"[FIN] Total de sorties : "
-        f"{len(tracks)}"
+        "[FIN] Traités : "
+        f"{STATS['traités']} | Ajoutés : {STATS['ajoutés']} | "
+        f"Ignorés : {STATS['ignorés']} | Erreurs : {STATS['erreurs']}"
     )
+    log(f"[FIN] Durée totale : {elapsed:.1f}s ({elapsed / 60:.1f} min)")
     log("=" * 70)
 
 
