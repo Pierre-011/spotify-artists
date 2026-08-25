@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sys
 import time
@@ -18,6 +19,31 @@ from playwright.sync_api import sync_playwright
 ROOT_DIR = Path.cwd()
 ARTISTS_FILE = ROOT_DIR / "data" / "artistes.json"
 RELEASES_FILE = ROOT_DIR / "data" / "sorties.json"
+SHARDS_DIR = ROOT_DIR / "data" / "shards"
+
+# --- Sharding (répartition entre jobs GitHub Actions) -------------------
+# SHARD_INDEX (0-based) et SHARD_TOTAL définissent quelle tranche des
+# artistes CE job traite. Fournis via variables d'environnement par le
+# workflow matrix — en local (sans les définir), le script traite tous
+# les artistes comme un seul shard (comportement inchangé).
+SHARD_INDEX = int(os.environ.get("SHARD_INDEX", "0"))
+SHARD_TOTAL = int(os.environ.get("SHARD_TOTAL", "1"))
+
+if SHARD_TOTAL < 1:
+    raise ValueError("SHARD_TOTAL doit être >= 1.")
+
+if not (0 <= SHARD_INDEX < SHARD_TOTAL):
+    raise ValueError(
+        f"SHARD_INDEX ({SHARD_INDEX}) doit être compris entre 0 et "
+        f"SHARD_TOTAL - 1 ({SHARD_TOTAL - 1})."
+    )
+
+# Chaque shard écrit UNIQUEMENT ses nouvelles trouvailles dans son propre
+# fichier (jamais dans data/sorties.json directement) : plusieurs jobs
+# matrix tournent sur des runners séparés et ne peuvent pas se
+# synchroniser entre eux. Un job de fusion dédié (scripts/merge_shards.py)
+# combine ensuite tous les fichiers shard + l'historique existant.
+SHARD_OUTPUT_FILE = SHARDS_DIR / f"sorties_shard_{SHARD_INDEX}.json"
 
 SPOTIFY_USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) "
@@ -40,7 +66,7 @@ SPOTIFY_USER_AGENT = (
 # Chaque worker lance un Chromium complet : reste raisonnable en mémoire
 # (2-4 sur un runner CI standard). Monte progressivement en observant les
 # WARN/ERREUR dans les logs.
-MAX_WORKERS = 3
+MAX_WORKERS = 2
 
 # Nombre d'artistes traités avant de recréer le contexte navigateur
 # À L'INTÉRIEUR d'un même worker (évite l'accumulation mémoire sur de
@@ -213,6 +239,35 @@ def save_releases(data: Dict[str, Any]) -> None:
         file.write("\n")
 
     log(f"[INFO] Fichier sauvegardé : {RELEASES_FILE}")
+
+
+def save_shard_output(new_entries: List[Dict[str, Any]]) -> None:
+    """Sauvegarde INCRÉMENTALE des nouvelles sorties trouvées par CE
+    shard uniquement (pas l'historique complet). Appelée à chaque
+    nouvelle trouvaille pour garder la sécurité anti-crash de la version
+    précédente, sans jamais toucher à data/sorties.json — ce fichier
+    est fusionné a posteriori par scripts/merge_shards.py."""
+    SHARDS_DIR.mkdir(parents=True, exist_ok=True)
+
+    with SHARD_OUTPUT_FILE.open("w", encoding="utf-8") as file:
+        json.dump(
+            {"tracks": new_entries},
+            file,
+            ensure_ascii=False,
+            indent=2,
+        )
+        file.write("\n")
+
+    log(f"[INFO] Shard sauvegardé : {SHARD_OUTPUT_FILE} ({len(new_entries)} sortie(s))")
+
+
+def select_shard_artists(
+    artists: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Répartition déterministe par tranche (slicing avec un pas de
+    SHARD_TOTAL) : chaque artiste appartient à exactement un shard, et
+    le découpage ne dépend pas de l'ordre d'exécution des jobs."""
+    return artists[SHARD_INDEX::SHARD_TOTAL]
 
 
 def parse_date(value: str) -> Optional[date]:
@@ -798,13 +853,28 @@ def main() -> None:
     log("[DÉMARRAGE] Mise à jour des sorties (mode multiprocessus)")
     log(f"[DÉMARRAGE] Date du jour : {today.isoformat()}")
     log(f"[DÉMARRAGE] Workers : {MAX_WORKERS}")
+    log(f"[DÉMARRAGE] Shard : {SHARD_INDEX + 1}/{SHARD_TOTAL}")
     log("=" * 70)
 
-    artists = load_artists()
-    releases_data = load_releases()
-    tracks = releases_data["tracks"]
+    all_artists = load_artists()
+    artists = select_shard_artists(all_artists)
 
-    log(f"[INFO] Artistes à traiter : {len(artists)}")
+    log(
+        f"[INFO] Artistes dans ce shard : {len(artists)} "
+        f"(sur {len(all_artists)} au total)"
+    )
+
+    if not artists:
+        log("[INFO] Aucun artiste pour ce shard, fin immédiate.")
+        return
+
+    # data/sorties.json n'est lu ici que pour la DÉDUPLICATION (éviter de
+    # re-signaler une sortie déjà connue) — ce shard n'écrit jamais dedans.
+    releases_data = load_releases()
+    known_tracks = releases_data["tracks"]
+
+    # Nouvelles sorties trouvées PAR CE SHARD uniquement.
+    new_entries: List[Dict[str, Any]] = []
 
     stats = {"traités": 0, "ajoutés": 0, "ignorés": 0, "erreurs": 0}
 
@@ -864,15 +934,17 @@ def main() -> None:
         elif kind == "release":
             _, worker_id, entry = message
 
-            if entry_already_exists(tracks, entry):
+            # Dédup contre l'historique connu ET contre ce que ce shard
+            # a déjà trouvé lui-même dans ce run.
+            if entry_already_exists(known_tracks, entry) or entry_already_exists(new_entries, entry):
                 log(
-                    f"[INFO] Projet déjà présent dans sorties.json : {entry['album_name']}",
+                    f"[INFO] Projet déjà présent : {entry['album_name']}",
                     worker_id,
                 )
                 stats["ignorés"] += 1
             else:
-                tracks.append(entry)
-                save_releases({"tracks": tracks})
+                new_entries.append(entry)
+                save_shard_output(new_entries)
                 log(
                     f"[SUCCÈS] Sortie ajoutée : {entry['album_name']} — {entry['artist_name']}",
                     worker_id,
@@ -896,7 +968,7 @@ def main() -> None:
 
     log("")
     log("=" * 70)
-    log(f"[FIN] Total de sorties : {len(tracks)}")
+    log(f"[FIN] Shard {SHARD_INDEX + 1}/{SHARD_TOTAL} — nouvelles sorties : {len(new_entries)}")
     log(
         "[FIN] Traités : "
         f"{stats['traités']} | Ajoutés : {stats['ajoutés']} | "
