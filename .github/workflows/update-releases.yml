@@ -43,11 +43,11 @@ jobs:
           ls -la scripts
           test -f data/artistes.json
           test -f scripts/update_releases.py
-      - name: Mettre à jour les sorties (shard ${{ matrix.shard }}/5)
+      - name: Mettre à jour les sorties (shard ${{ matrix.shard }}/10)
         env:
           PYTHONUNBUFFERED: "1"
           SHARD_INDEX: ${{ matrix.shard }}
-          SHARD_TOTAL: 5
+          SHARD_TOTAL: 10
         run: |
           python -u scripts/update_releases.py
       - name: Publier le résultat du shard
