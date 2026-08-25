@@ -40,7 +40,7 @@ SPOTIFY_USER_AGENT = (
 # Chaque worker lance un Chromium complet : reste raisonnable en mémoire
 # (2-4 sur un runner CI standard). Monte progressivement en observant les
 # WARN/ERREUR dans les logs.
-MAX_WORKERS = 3
+MAX_WORKERS = 4
 
 # Nombre d'artistes traités avant de recréer le contexte navigateur
 # À L'INTÉRIEUR d'un même worker (évite l'accumulation mémoire sur de
