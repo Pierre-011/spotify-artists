@@ -22,10 +22,6 @@ RELEASES_FILE = ROOT_DIR / "data" / "sorties.json"
 SHARDS_DIR = ROOT_DIR / "data" / "shards"
 
 # --- Sharding (répartition entre jobs GitHub Actions) -------------------
-# SHARD_INDEX (0-based) et SHARD_TOTAL définissent quelle tranche des
-# artistes CE job traite. Fournis via variables d'environnement par le
-# workflow matrix — en local (sans les définir), le script traite tous
-# les artistes comme un seul shard (comportement inchangé).
 SHARD_INDEX = int(os.environ.get("SHARD_INDEX", "0"))
 SHARD_TOTAL = int(os.environ.get("SHARD_TOTAL", "1"))
 
@@ -38,11 +34,6 @@ if not (0 <= SHARD_INDEX < SHARD_TOTAL):
         f"SHARD_TOTAL - 1 ({SHARD_TOTAL - 1})."
     )
 
-# Chaque shard écrit UNIQUEMENT ses nouvelles trouvailles dans son propre
-# fichier (jamais dans data/sorties.json directement) : plusieurs jobs
-# matrix tournent sur des runners séparés et ne peuvent pas se
-# synchroniser entre eux. Un job de fusion dédié (scripts/merge_shards.py)
-# combine ensuite tous les fichiers shard + l'historique existant.
 SHARD_OUTPUT_FILE = SHARDS_DIR / f"sorties_shard_{SHARD_INDEX}.json"
 
 SPOTIFY_USER_AGENT = (
@@ -53,31 +44,10 @@ SPOTIFY_USER_AGENT = (
 )
 
 # --- Réglages de performance -------------------------------------------
-# Nombre de PROCESSUS traités en parallèle, chacun avec son propre
-# navigateur Playwright.
-#
-# IMPORTANT : Playwright sync API n'est PAS thread-safe (elle pilote sa
-# boucle asyncio interne via des greenlets liés à un seul thread). Un
-# ThreadPoolExecutor provoque des erreurs "cannot switch to a different
-# thread". Le parallélisme doit donc passer par des PROCESSUS séparés
-# (multiprocessing), chacun avec son propre interpréteur et sa propre
-# instance Playwright — jamais par des threads.
-#
-# Chaque worker lance un Chromium complet : reste raisonnable en mémoire
-# (2-4 sur un runner CI standard). Monte progressivement en observant les
-# WARN/ERREUR dans les logs.
 MAX_WORKERS = 3
-
-# Nombre d'artistes traités avant de recréer le contexte navigateur
-# À L'INTÉRIEUR d'un même worker (évite l'accumulation mémoire sur de
-# longues chaînes de pages consultées par un seul processus).
 CONTEXT_RECYCLE_EVERY = 40
-
-# Délai aléatoire (secondes) entre deux artistes traités par un même worker.
 MIN_DELAY_PER_WORKER = 1.0
 MAX_DELAY_PER_WORKER = 2.5
-
-# Timeout réseau "idle" utilisé à la place des attentes fixes.
 NETWORK_IDLE_TIMEOUT_MS = 15000
 # -------------------------------------------------------------------------
 
@@ -225,8 +195,6 @@ def load_releases() -> Dict[str, Any]:
 
 
 def save_releases(data: Dict[str, Any]) -> None:
-    """N'est appelée QUE depuis le processus principal (voir main()) :
-    un seul processus écrit sur disque, donc aucun verrou nécessaire."""
     RELEASES_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     with RELEASES_FILE.open("w", encoding="utf-8") as file:
@@ -242,11 +210,6 @@ def save_releases(data: Dict[str, Any]) -> None:
 
 
 def save_shard_output(new_entries: List[Dict[str, Any]]) -> None:
-    """Sauvegarde INCRÉMENTALE des nouvelles sorties trouvées par CE
-    shard uniquement (pas l'historique complet). Appelée à chaque
-    nouvelle trouvaille pour garder la sécurité anti-crash de la version
-    précédente, sans jamais toucher à data/sorties.json — ce fichier
-    est fusionné a posteriori par scripts/merge_shards.py."""
     SHARDS_DIR.mkdir(parents=True, exist_ok=True)
 
     with SHARD_OUTPUT_FILE.open("w", encoding="utf-8") as file:
@@ -264,14 +227,10 @@ def save_shard_output(new_entries: List[Dict[str, Any]]) -> None:
 def select_shard_artists(
     artists: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Répartition déterministe par tranche (slicing avec un pas de
-    SHARD_TOTAL) : chaque artiste appartient à exactement un shard, et
-    le découpage ne dépend pas de l'ordre d'exécution des jobs."""
     return artists[SHARD_INDEX::SHARD_TOTAL]
 
 
 def parse_date(value: str) -> Optional[date]:
-    """Parse une date Spotify en français ou en anglais."""
     if not value:
         return None
 
@@ -540,9 +499,36 @@ def extract_album_links(page) -> List[str]:
     return links
 
 
-def get_album_title(page, album_url: str) -> str:
-    album_id = get_spotify_id(album_url, "album")
+def looks_like_interface_label(title: str) -> bool:
+    """Détecte les titres qui ressemblent à des labels d’interface (langue, etc.)."""
+    if not title:
+        return True
 
+    if len(title) < 2 or len(title) > 250:
+        return True
+
+    has_arabic_script = bool(re.search(r"[\u0600-\u06FF]", title))
+    has_word_arabic = bool(re.search(r"\bArabic\b", title, flags=re.IGNORECASE))
+
+    if has_arabic_script and has_word_arabic:
+        if re.search(r"[\u0600-\u06FF]\s*Arabic|Arabic\s*[\u0600-\u06FF]", title, flags=re.IGNORECASE):
+            return True
+
+    return False
+
+
+def get_album_title(page, album_url: str) -> str:
+    # 1) Priorité au h1 principal (titre de l’album sur Spotify)
+    try:
+        h1 = page.locator("h1").first
+        title = h1.inner_text(timeout=3000).strip()
+        if title and len(title) <= 250 and not looks_like_interface_label(title):
+            return " ".join(title.split())
+    except Exception:
+        pass
+
+    # 2) Fallback sur les ancres pointant vers /album/
+    album_id = get_spotify_id(album_url, "album")
     anchors = page.locator("a[href*='/album/']")
     count = anchors.count()
 
@@ -560,19 +546,8 @@ def get_album_title(page, album_url: str) -> str:
 
         title = " ".join(text.split())
 
-        if len(title) <= 250:
+        if len(title) <= 250 and not looks_like_interface_label(title):
             return title
-
-    try:
-        headings = page.locator("h1")
-
-        if headings.count() > 0:
-            title = headings.first.inner_text(timeout=3000).strip()
-
-            if title:
-                return " ".join(title.split())
-    except Exception:
-        pass
 
     return ""
 
@@ -585,8 +560,6 @@ def save_debug_html(html: str, artist_name: str, worker_id: int) -> Path:
 
 
 def wait_for_page_ready(page, worker_id: int) -> None:
-    """Attentes conditionnelles (au lieu de wait_for_timeout fixes) :
-    on avance dès que le contenu et le réseau sont prêts."""
     try:
         page.wait_for_selector(
             "main, h1, a[href*='/artist/'], a[href*='/album/']",
@@ -607,6 +580,18 @@ def wait_for_page_ready(page, worker_id: int) -> None:
         )
     except PlaywrightTimeoutError:
         pass
+
+
+def sanitize_title(title: str, fallback: str = "Titre inconnu") -> str:
+    if not title or not title.strip():
+        return fallback
+
+    title = " ".join(title.split())
+
+    if looks_like_interface_label(title):
+        return fallback
+
+    return title
 
 
 def get_latest_spotify_project(
@@ -685,7 +670,8 @@ def get_latest_spotify_project(
 
         return None
 
-    title = get_album_title(page, latest_album_url) or artist_name
+    raw_title = get_album_title(page, latest_album_url)
+    title = sanitize_title(raw_title, fallback=f"Album inconnu ({latest_album_id})")
 
     return {
         "title": title,
@@ -724,12 +710,15 @@ def build_release_entry(
 ) -> Dict[str, Any]:
     release_date_str = release_date.isoformat()
 
+    raw_title = project.get("title", "")
+    title = sanitize_title(raw_title, fallback="Album inconnu")
+
     return {
         "id": project.get("album_id", ""),
-        "name": project.get("title", ""),
+        "name": title,
         "artist_name": artist.get("name", "Artiste inconnu"),
         "artist_id": artist.get("id", ""),
-        "album_name": project.get("title", ""),
+        "album_name": title,
         "release_type": project.get("release_type", "unknown"),
         "release_date": release_date_str,
         "album_image": "",
@@ -756,15 +745,6 @@ def worker_main(
     today_iso: str,
     result_queue: "mp.Queue",
 ) -> None:
-    """Fonction exécutée dans un PROCESSUS séparé. Chaque worker possède
-    son propre interpréteur Python et sa propre instance Playwright —
-    c'est ce qui rend le parallélisme possible sans toucher aux
-    limitations thread-safety de l'API sync de Playwright.
-
-    Ne touche jamais au disque directement : tout résultat est envoyé
-    au processus principal via `result_queue`, qui centralise l'écriture
-    de sorties.json.
-    """
     today = date.fromisoformat(today_iso)
 
     log(f"[INFO] Démarrage, {len(artists_chunk)} artiste(s) à traiter.", worker_id)
@@ -868,12 +848,9 @@ def main() -> None:
         log("[INFO] Aucun artiste pour ce shard, fin immédiate.")
         return
 
-    # data/sorties.json n'est lu ici que pour la DÉDUPLICATION (éviter de
-    # re-signaler une sortie déjà connue) — ce shard n'écrit jamais dedans.
     releases_data = load_releases()
     known_tracks = releases_data["tracks"]
 
-    # Nouvelles sorties trouvées PAR CE SHARD uniquement.
     new_entries: List[Dict[str, Any]] = []
 
     stats = {"traités": 0, "ajoutés": 0, "ignorés": 0, "erreurs": 0}
@@ -902,8 +879,6 @@ def main() -> None:
     workers_remaining = len(processes)
     progress_counter = 0
 
-    # Boucle de consommation : le processus principal est le SEUL à écrire
-    # sur disque, donc aucun verrou n'est nécessaire ici.
     while workers_remaining > 0:
         try:
             message = result_queue.get(timeout=300)
@@ -934,8 +909,6 @@ def main() -> None:
         elif kind == "release":
             _, worker_id, entry = message
 
-            # Dédup contre l'historique connu ET contre ce que ce shard
-            # a déjà trouvé lui-même dans ce run.
             if entry_already_exists(known_tracks, entry) or entry_already_exists(new_entries, entry):
                 log(
                     f"[INFO] Projet déjà présent : {entry['album_name']}",
