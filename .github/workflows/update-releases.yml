@@ -1,18 +1,24 @@
 name: Mise à jour des sorties
+
 on:
   schedule:
     - cron: "30 0 * * *"
       timezone: "Europe/Paris"
   workflow_dispatch:
+
 permissions:
   contents: write
+
 concurrency:
   group: update-releases
   cancel-in-progress: false
+
 jobs:
   update:
     name: Vérifier les sorties musicales (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Paris
     timeout-minutes: 120
     strategy:
       fail-fast: false
@@ -23,17 +29,21 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
       - name: Installer Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
       - name: Installer les dépendances Python
         run: |
           python -m pip install --upgrade pip
           python -m pip install playwright beautifulsoup4
+
       - name: Installer Chromium pour Playwright
         run: |
           python -m playwright install --with-deps chromium
+
       - name: Vérifier la structure du dépôt
         run: |
           echo "Répertoire courant : $(pwd)"
@@ -43,6 +53,7 @@ jobs:
           ls -la scripts
           test -f data/artistes.json
           test -f scripts/update_releases.py
+
       - name: Mettre à jour les sorties (shard ${{ matrix.shard }}/10)
         env:
           PYTHONUNBUFFERED: "1"
@@ -50,6 +61,7 @@ jobs:
           SHARD_TOTAL: 10
         run: |
           python -u scripts/update_releases.py
+
       - name: Publier le résultat du shard
         uses: actions/upload-artifact@v4
         with:
@@ -62,6 +74,8 @@ jobs:
     name: Fusionner les shards et publier
     needs: update
     runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Paris
     timeout-minutes: 15
     if: always()
     steps:
@@ -69,25 +83,30 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+
       - name: Installer Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+
       - name: Télécharger tous les shards
         uses: actions/download-artifact@v4
         with:
           pattern: sorties-shard-*
           path: data/shards
           merge-multiple: true
+
       - name: Vérifier les shards téléchargés
         run: |
           echo "Contenu de data/shards :"
           ls -la data/shards || echo "Aucun shard reçu."
+
       - name: Fusionner les shards dans sorties.json
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           python -u scripts/merge_shards.py
+
       - name: Vérifier les modifications
         id: changes
         shell: bash
@@ -100,6 +119,7 @@ jobs:
             echo "Modification de data/sorties.json détectée."
             git diff --stat -- data/sorties.json
           fi
+
       - name: Enregistrer les nouvelles sorties
         if: steps.changes.outputs.changed == 'true'
         run: |
