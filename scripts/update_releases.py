@@ -79,6 +79,23 @@ INTERFACE_LABEL_BLACKLIST = {
 }
 
 
+# Caractères invisibles/de contrôle (marques bidi RTL/LTR, isolats,
+# zero-width, BOM, soft hyphen) qui peuvent faire croire à un titre "valide"
+# de 2+ caractères alors qu'il n'y a en réalité qu'un seul glyphe visible
+# (typiquement injecté par des éléments liés au sélecteur de langue arabe).
+INVISIBLE_CHARS_PATTERN = re.compile(
+    r"[\u00AD\u061C\u200B\u200C\u200D\u200E\u200F"
+    r"\u202A-\u202E\u2066-\u2069\uFEFF]"
+)
+
+
+def strip_invisible_chars(text: str) -> str:
+    if not text:
+        return text
+
+    return INVISIBLE_CHARS_PATTERN.sub("", text)
+
+
 def log(message: str, worker_id: Optional[int] = None) -> None:
     prefix = f"[W{worker_id}] " if worker_id is not None else ""
     print(f"{prefix}{message}", flush=True)
@@ -531,12 +548,18 @@ def looks_like_interface_label(title: str) -> bool:
     if not title:
         return True
 
-    if len(title) < 2 or len(title) > 250:
+    # On nettoie d'abord les caractères invisibles (marques bidi, zero-width...)
+    # AVANT de vérifier la longueur, sinon un titre visuellement composé d'un
+    # seul glyphe (ex: un caractère arabe entouré de marques RTL) passe le
+    # test de longueur car ces caractères invisibles comptent dans len().
+    cleaned_title = strip_invisible_chars(title).strip()
+
+    if len(cleaned_title) < 2 or len(cleaned_title) > 250:
         return True
 
     # Rejet des libellés d'interface connus (sidebar, nav, boutons génériques)
     # comparaison insensible à la casse et aux espaces superflus
-    normalized_title = " ".join(title.strip().lower().split())
+    normalized_title = " ".join(cleaned_title.lower().split())
 
     if normalized_title in INTERFACE_LABEL_BLACKLIST:
         return True
@@ -551,59 +574,62 @@ def looks_like_interface_label(title: str) -> bool:
     return False
 
 
-def get_album_title(page, album_url: str) -> str:
-    # 1) Priorité à la meta og:title : Spotify la remplit de façon fiable et
-    #    SPÉCIFIQUE à chaque page d'album (utilisée pour les aperçus de
-    #    partage sur les réseaux sociaux). Contrairement au h1, elle n'est
-    #    jamais partagée avec des éléments d'interface générale comme la
-    #    sidebar ("Bibliothèque", "Accueil", etc.).
-    try:
-        og_title = page.locator("meta[property='og:title']").get_attribute(
-            "content", timeout=3000
-        )
+def extract_album_title_from_html(
+    html: str,
+    album_id: str,
+    worker_id: Optional[int] = None,
+) -> str:
+    """Extrait le titre d'album depuis le MÊME snapshot HTML que celui
+    utilisé pour la date (évite tout décalage temporel/race condition
+    entre deux requêtes live successives sur le même objet `page`)."""
+    soup = BeautifulSoup(html, "html.parser")
 
-        if og_title:
-            title = " ".join(og_title.strip().split())
+    def _clean(raw: Optional[str]) -> str:
+        if not raw:
+            return ""
+        return " ".join(strip_invisible_chars(raw).strip().split())
 
-            if title and len(title) <= 250 and not looks_like_interface_label(title):
-                return title
-    except Exception:
-        pass
+    # 1) Élément dédié au titre de l'entité (album), le plus spécifique
+    entity_title_el = soup.select_one("[data-testid='entityTitle']")
 
-    # 2) Fallback : h1 scopé à la zone de contenu principale, pour éviter
-    #    d'attraper un h1 de la sidebar ou d'un autre élément d'interface
-    #    global à toutes les pages.
-    try:
-        h1 = page.locator(
-            "[data-testid='entityTitle'] h1, main h1, h1"
-        ).first
-        title = h1.inner_text(timeout=3000).strip()
+    if entity_title_el is not None:
+        h1_inside = entity_title_el.find("h1")
+        raw = h1_inside.get_text(" ", strip=True) if h1_inside else entity_title_el.get_text(" ", strip=True)
+        title = _clean(raw)
 
         if title and len(title) <= 250 and not looks_like_interface_label(title):
-            return " ".join(title.split())
-    except Exception:
-        pass
+            log(f"[TITRE] Trouvé via [data-testid='entityTitle'] : {title}", worker_id)
+            return title
 
-    # 3) Fallback : ancre correspondant à l'album_id
-    album_id = get_spotify_id(album_url, "album")
-    anchors = page.locator("a[href*='/album/']")
-    count = anchors.count()
+    # 2) meta og:title (spécifique à la page si le SSR/cache est cohérent)
+    og_meta = soup.select_one("meta[property='og:title']")
 
-    for index in range(count):
-        anchor = anchors.nth(index)
+    if og_meta is not None:
+        title = _clean(og_meta.get("content", ""))
 
-        try:
-            href = anchor.get_attribute("href") or ""
-            text = anchor.inner_text(timeout=3000).strip()
-        except Exception:
-            continue
+        if title and len(title) <= 250 and not looks_like_interface_label(title):
+            log(f"[TITRE] Trouvé via meta og:title : {title}", worker_id)
+            return title
 
-        if album_id not in href or not text:
-            continue
+    # 3) h1 scopé à <main>, pour éviter la sidebar/nav
+    main_el = soup.find("main")
 
-        title = " ".join(text.split())
+    if main_el is not None:
+        h1_in_main = main_el.find("h1")
 
-        if len(title) <= 250 and not looks_like_interface_label(title):
+        if h1_in_main is not None:
+            title = _clean(h1_in_main.get_text(" ", strip=True))
+
+            if title and len(title) <= 250 and not looks_like_interface_label(title):
+                log(f"[TITRE] Trouvé via main h1 : {title}", worker_id)
+                return title
+
+    # 4) Dernier recours : ancre pointant vers l'album_id
+    for anchor in soup.select(f"a[href*='{album_id}']"):
+        title = _clean(anchor.get_text(" ", strip=True))
+
+        if title and len(title) <= 250 and not looks_like_interface_label(title):
+            log(f"[TITRE] Trouvé via ancre album_id : {title}", worker_id)
             return title
 
     return ""
@@ -643,7 +669,7 @@ def sanitize_title(title: str, fallback: str = "Titre inconnu") -> str:
     if not title or not title.strip():
         return fallback
 
-    title = " ".join(title.split())
+    title = " ".join(strip_invisible_chars(title).split())
 
     if looks_like_interface_label(title):
         return fallback
@@ -727,8 +753,16 @@ def get_latest_spotify_project(
 
         return None
 
-    raw_title = get_album_title(page, latest_album_url)
+    raw_title = extract_album_title_from_html(html, latest_album_id, worker_id)
     title = sanitize_title(raw_title, fallback=f"Album inconnu ({latest_album_id})")
+
+    if not raw_title:
+        log(
+            f"[AVERTISSEMENT] Aucun titre extrait pour {latest_album_url}, "
+            "sauvegarde du HTML pour diagnostic.",
+            worker_id,
+        )
+        save_debug_html(html, f"{artist_name}_titre_manquant", worker_id)
 
     return {
         "title": title,
@@ -806,6 +840,12 @@ def worker_main(
 
     log(f"[INFO] Démarrage, {len(artists_chunk)} artiste(s) à traiter.", worker_id)
 
+    # Garde-fou anti-doublon : si le même titre revient pour deux album_id
+    # différents dans ce worker, c'est le signe d'un bug d'extraction
+    # (cache, race condition, page générique...) plutôt qu'une vraie
+    # coïncidence. On neutralise alors le titre suspect.
+    seen_titles: Dict[str, str] = {}
+
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         context = create_browser_context(browser)
@@ -829,6 +869,27 @@ def worker_main(
                                 f"{release_date.isoformat()} != {today.isoformat()}",
                             ))
                         else:
+                            candidate_title = project.get("title", "")
+                            album_id = project.get("album_id", "")
+
+                            previous_album_id = seen_titles.get(candidate_title)
+
+                            if (
+                                candidate_title
+                                and previous_album_id is not None
+                                and previous_album_id != album_id
+                            ):
+                                log(
+                                    "[ALERTE] Titre suspect détecté (identique pour "
+                                    f"2 albums différents : '{candidate_title}' — "
+                                    f"{previous_album_id} et {album_id}). "
+                                    "Titre neutralisé, utilisation du fallback.",
+                                    worker_id,
+                                )
+                                project["title"] = f"Album inconnu ({album_id})"
+                            elif candidate_title:
+                                seen_titles[candidate_title] = album_id
+
                             entry = build_release_entry(artist, project, release_date)
                             result_queue.put(("release", worker_id, entry))
 
