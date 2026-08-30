@@ -518,16 +518,29 @@ def looks_like_interface_label(title: str) -> bool:
 
 
 def get_album_title(page, album_url: str) -> str:
-    # 1) Priorité au h1 principal (titre de l’album sur Spotify)
+    # 1) Priorité à la meta og:title, remplie de façon fiable par Spotify
+    #    pour CHAQUE page d'album (contrairement au h1, partagé avec l'UI générale)
     try:
-        h1 = page.locator("h1").first
+        og_title = page.locator("meta[property='og:title']").get_attribute(
+            "content", timeout=3000
+        )
+        if og_title:
+            title = " ".join(og_title.strip().split())
+            if title and len(title) <= 250 and not looks_like_interface_label(title):
+                return title
+    except Exception:
+        pass
+
+    # 2) Fallback : h1 scopé à la zone de contenu principale (pas toute la page)
+    try:
+        h1 = page.locator("main h1, [data-testid='entityTitle'] h1, h1").first
         title = h1.inner_text(timeout=3000).strip()
         if title and len(title) <= 250 and not looks_like_interface_label(title):
             return " ".join(title.split())
     except Exception:
         pass
 
-    # 2) Fallback sur les ancres pointant vers /album/
+    # 3) Fallback existant : ancre correspondant à l'album_id
     album_id = get_spotify_id(album_url, "album")
     anchors = page.locator("a[href*='/album/']")
     count = anchors.count()
