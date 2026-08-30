@@ -51,6 +51,33 @@ MAX_DELAY_PER_WORKER = 2.5
 NETWORK_IDLE_TIMEOUT_MS = 15000
 # -------------------------------------------------------------------------
 
+# Libellés d'interface connus à rejeter systématiquement s'ils sont
+# retournés comme "titre d'album" (sidebar, nav, boutons génériques, etc.)
+INTERFACE_LABEL_BLACKLIST = {
+    "bibliothèque",
+    "ta bibliothèque",
+    "your library",
+    "library",
+    "accueil",
+    "home",
+    "rechercher",
+    "search",
+    "à la une",
+    "populaire",
+    "spotify",
+    "premium",
+    "connexion",
+    "log in",
+    "s'inscrire",
+    "sign up",
+    "playlists",
+    "artistes",
+    "artists",
+    "albums",
+    "podcasts et émissions",
+    "podcasts & shows",
+}
+
 
 def log(message: str, worker_id: Optional[int] = None) -> None:
     prefix = f"[W{worker_id}] " if worker_id is not None else ""
@@ -500,11 +527,18 @@ def extract_album_links(page) -> List[str]:
 
 
 def looks_like_interface_label(title: str) -> bool:
-    """Détecte les titres qui ressemblent à des labels d’interface (langue, etc.)."""
+    """Détecte les titres qui ressemblent à des labels d'interface (langue, nav, etc.)."""
     if not title:
         return True
 
     if len(title) < 2 or len(title) > 250:
+        return True
+
+    # Rejet des libellés d'interface connus (sidebar, nav, boutons génériques)
+    # comparaison insensible à la casse et aux espaces superflus
+    normalized_title = " ".join(title.strip().lower().split())
+
+    if normalized_title in INTERFACE_LABEL_BLACKLIST:
         return True
 
     has_arabic_script = bool(re.search(r"[\u0600-\u06FF]", title))
@@ -518,29 +552,39 @@ def looks_like_interface_label(title: str) -> bool:
 
 
 def get_album_title(page, album_url: str) -> str:
-    # 1) Priorité à la meta og:title, remplie de façon fiable par Spotify
-    #    pour CHAQUE page d'album (contrairement au h1, partagé avec l'UI générale)
+    # 1) Priorité à la meta og:title : Spotify la remplit de façon fiable et
+    #    SPÉCIFIQUE à chaque page d'album (utilisée pour les aperçus de
+    #    partage sur les réseaux sociaux). Contrairement au h1, elle n'est
+    #    jamais partagée avec des éléments d'interface générale comme la
+    #    sidebar ("Bibliothèque", "Accueil", etc.).
     try:
         og_title = page.locator("meta[property='og:title']").get_attribute(
             "content", timeout=3000
         )
+
         if og_title:
             title = " ".join(og_title.strip().split())
+
             if title and len(title) <= 250 and not looks_like_interface_label(title):
                 return title
     except Exception:
         pass
 
-    # 2) Fallback : h1 scopé à la zone de contenu principale (pas toute la page)
+    # 2) Fallback : h1 scopé à la zone de contenu principale, pour éviter
+    #    d'attraper un h1 de la sidebar ou d'un autre élément d'interface
+    #    global à toutes les pages.
     try:
-        h1 = page.locator("main h1, [data-testid='entityTitle'] h1, h1").first
+        h1 = page.locator(
+            "[data-testid='entityTitle'] h1, main h1, h1"
+        ).first
         title = h1.inner_text(timeout=3000).strip()
+
         if title and len(title) <= 250 and not looks_like_interface_label(title):
             return " ".join(title.split())
     except Exception:
         pass
 
-    # 3) Fallback existant : ancre correspondant à l'album_id
+    # 3) Fallback : ancre correspondant à l'album_id
     album_id = get_spotify_id(album_url, "album")
     anchors = page.locator("a[href*='/album/']")
     count = anchors.count()
