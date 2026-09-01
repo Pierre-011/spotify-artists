@@ -4432,6 +4432,61 @@
       "release_date": "2026-08-31",
       "album_image": "",
       "url": "https://open.spotify.com/album/3BCZoT3USEjxGlmn0RIsfz"
+    },
+    {
+      "id": "72LlFralN4dcKjXwZaH9wU",
+      "name": "Un Fidèle",
+      "artist_name": "Nayko",
+      "artist_id": "4wWeGXheQoVFCmqzhqZgVf",
+      "album_name": "Un Fidèle",
+      "release_type": "unknown",
+      "release_date": "2026-09-01",
+      "album_image": "",
+      "url": "https://open.spotify.com/album/72LlFralN4dcKjXwZaH9wU"
+    },
+    {
+      "id": "21nEPG0obpsm3dOJxPFXzY",
+      "name": "Nostalgie",
+      "artist_name": "GVLK",
+      "artist_id": "4gHe6eMraHrQr0cJOh1KnD",
+      "album_name": "Nostalgie",
+      "release_type": "unknown",
+      "release_date": "2026-09-01",
+      "album_image": "",
+      "url": "https://open.spotify.com/album/21nEPG0obpsm3dOJxPFXzY"
+    },
+    {
+      "id": "4RVyYqLUboH870PCYekkYJ",
+      "name": "CALL MY NAME",
+      "artist_name": "JLS Sad",
+      "artist_id": "7C4Rqk5aB25UQpNkcKHHqd",
+      "album_name": "CALL MY NAME",
+      "release_type": "unknown",
+      "release_date": "2026-09-01",
+      "album_image": "",
+      "url": "https://open.spotify.com/album/4RVyYqLUboH870PCYekkYJ"
+    },
+    {
+      "id": "6hzYmAlWQTC60in9xf6ltx",
+      "name": "Luciole",
+      "artist_name": "Jekill LaMotta",
+      "artist_id": "21YdTTvWNjDnHoyd6uW29U",
+      "album_name": "Luciole",
+      "release_type": "unknown",
+      "release_date": "2026-09-01",
+      "album_image": "",
+      "url": "https://open.spotify.com/album/6hzYmAlWQTC60in9xf6ltx"
+    },
+    {
+      "id": "3L2TD8zHqMLt672BRkN6Da",
+      "name": "PAYBACK",
+      "artist_name": "6kawa",
+      "artist_id": "6vPZMbZWUVf3O4BxGSYgzh",
+      "album_name": "PAYBACK",
+      "release_type": "unknown",
+      "release_date": "2026-09-01",
+      "album_image": "",
+      "url": "https://open.spotify.com/album/3L2TD8zHqMLt672BRkN6Da"
     }
   ]
 }
