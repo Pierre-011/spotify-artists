@@ -1606,7 +1606,11 @@ document.addEventListener(
         */
 
         initialize();
+		const runWorkflowBtn = $("run-workflow-btn");
 
+		if (runWorkflowBtn) {
+    		runWorkflowBtn.addEventListener("click", triggerWorkflow);
+		}
     }
 )
 async function triggerWorkflow() {
