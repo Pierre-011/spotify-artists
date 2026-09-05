@@ -1612,43 +1612,4 @@ document.addEventListener(
     		runWorkflowBtn.addEventListener("click", triggerWorkflow);
 		}
     }
-)
-async function triggerWorkflow() {
-    const button = $("run-workflow-btn");
-    const status = $("workflow-status");
-
-    if (!button) {
-        return;
-    }
-
-    button.disabled = true;
-
-    if (status) {
-        status.textContent = "Lancement du workflow...";
-    }
-
-    try {
-        const response = await fetch("/api/run-workflow", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error("Impossible de lancer le workflow.");
-        }
-
-        if (status) {
-            status.textContent = "Workflow lancé avec succès.";
-        }
-    } catch (error) {
-        console.error(error);
-
-        if (status) {
-            status.textContent = "Erreur lors du lancement.";
-        }
-    } finally {
-        button.disabled = false;
-    }
 };
