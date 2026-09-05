@@ -798,26 +798,15 @@ footer {
 }
 
 .run-workflow-btn {
+    display: inline-block;
     padding: 12px 16px;
-    border: 0;
     border-radius: 999px;
     background: var(--spotify);
     color: #071108;
+    text-decoration: none;
     font-weight: 800;
-    cursor: pointer;
 }
 
 .run-workflow-btn:hover {
     background: #25e36a;
-}
-
-.run-workflow-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.workflow-status {
-    min-height: 16px;
-    font-size: 12px;
-    color: var(--text-secondary);
 }
