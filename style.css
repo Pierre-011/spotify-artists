@@ -21,18 +21,9 @@ body {
 }
 
 body {
-    background:
-        radial-gradient(
-            circle at top right,
-            #17301f 0%,
-            var(--background) 40%
-        );
+    background: radial-gradient(circle at top right, #17301f 0%, var(--background) 40%);
     color: var(--text);
-    font-family:
-        Inter,
-        Arial,
-        Helvetica,
-        sans-serif;
+    font-family: Inter, Arial, Helvetica, sans-serif;
 }
 
 .header {
@@ -200,11 +191,7 @@ select:focus {
 
 .release-grid {
     display: grid;
-    grid-template-columns:
-        repeat(
-            auto-fill,
-            minmax(280px, 1fr)
-        );
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 18px;
 }
 
@@ -213,9 +200,7 @@ select:focus {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 15px;
-    transition:
-        transform .2s,
-        border-color .2s;
+    transition: transform .2s, border-color .2s;
 }
 
 .release-card:hover {
@@ -310,7 +295,7 @@ td {
 }
 
 tr:hover td {
-    background: rgba(255,255,255,.025);
+    background: rgba(255, 255, 255, .025);
 }
 
 .artist-name {
@@ -332,11 +317,7 @@ tr:hover td {
 
 .genre-grid {
     display: grid;
-    grid-template-columns:
-        repeat(
-            auto-fill,
-            minmax(200px, 1fr)
-        );
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 13px;
 }
 
@@ -381,6 +362,27 @@ footer {
     font-size: 12px;
 }
 
+.actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.run-workflow-btn {
+    display: inline-block;
+    padding: 12px 16px;
+    border-radius: 999px;
+    background: var(--spotify);
+    color: #071108;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+.run-workflow-btn:hover {
+    background: #25e36a;
+}
+
 @media (max-width: 700px) {
     .header-content,
     .page-header {
@@ -411,28 +413,8 @@ footer {
     footer {
         flex-direction: column;
     }
-   .actions {
-       align-items: flex-start;
-   }
-}
 
-.actions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-}
-
-.run-workflow-btn {
-    display: inline-block;
-    padding: 12px 16px;
-    border-radius: 999px;
-    background: var(--spotify);
-    color: #071108;
-    text-decoration: none;
-    font-weight: 800;
-}
-
-.run-workflow-btn:hover {
-    background: #25e36a;
+    .actions {
+        align-items: flex-start;
+    }
 }
