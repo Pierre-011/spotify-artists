@@ -145,29 +145,42 @@ function escapeHTML(value) {
    CHARGEMENT JSON
 ====================================================== */
 
-async function loadJSON(file) {
+async function loadJSON(path) {
+  const url = new URL(path, window.location.href);
 
-    const url =
-        file +
-        (file.includes("?") ? "&" : "?") +
-        "cache=" +
-        Date.now();
+  url.searchParams.set("t", Date.now());
 
-    console.log("Chargement :", url);
+  const response = await fetch(url.toString(), {
+    cache: "no-store"
+  });
 
-    const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(
+      `Erreur ${response.status} lors du chargement de ${url.pathname}`
+    );
+  }
 
-    if (!response.ok) {
-        throw new Error(
-            "Impossible de charger " +
-            file +
-            " (" +
-            response.status +
-            ")"
-        );
-    }
+  const contentType = response.headers.get("content-type") || "";
 
-    return await response.json();
+  const text = await response.text();
+
+  if (
+    !contentType.includes("json") &&
+    !text.trim().startsWith("{") &&
+    !text.trim().startsWith("[")
+  ) {
+    throw new Error(
+      `${url.pathname} ne contient pas du JSON. GitHub Pages renvoie probablement une page HTML ou une erreur 404.`
+    );
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(
+      `JSON invalide dans ${url.pathname} : ${error.message}`
+    );
+  }
 }
 
 
