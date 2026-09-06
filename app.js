@@ -351,109 +351,124 @@ function getSearchValue(id) {
    AFFICHAGE DES SORTIES DU JOUR
 ========================================================= */
 
-function renderReleases() {
-    const container = $("release-list");
+function getReleaseDate(release) {
+    if (!release) return "";
 
-    if (!container) {
-        console.error(
-            "L'élément #release-list est introuvable."
-        );
-        return;
+    // Champs possibles selon la structure du JSON
+    const rawDate =
+        release.release_date ??
+        release.releaseDate ??
+        release.date ??
+        release.published_at ??
+        release.publishedAt ??
+        "";
+
+    if (!rawDate) return "";
+
+    const value = String(rawDate).trim();
+
+    // Format ISO : 2026-09-06, 2026-09-06T00:00:00.000Z, etc.
+    const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoMatch) {
+        return isoMatch[1];
     }
 
+    // Format français éventuel : 06/09/2026
+    const frenchMatch = value.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (frenchMatch) {
+        const [, day, month, year] = frenchMatch;
+        return `${year}-${month}-${day}`;
+    }
+
+    return "";
+}
+
+function renderReleases() {
+    const container = $("release-list");
+    const countElement = $("release-count");
+    const searchElement = $("release-search");
+
+    if (!container) return;
+
     const today = getTodayParis();
-    const search = getSearchValue("release-search");
 
+    const search = searchElement
+        ? searchElement.value.trim().toLowerCase()
+        : "";
+
+    console.log("Date actuelle utilisée :", today);
     console.log("Nombre total de sorties :", releases.length);
-    console.log("Date recherchée :", today);
 
-    /*
-      On filtre obligatoirement sur la date du jour.
-    */
-    let todayReleases = releases.filter(release => {
-        const releaseDate = normalizeDate(
-            release.release_date
-        );
+    const releasesToday = releases.filter((release) => {
+        const releaseDate = getReleaseDate(release);
+
+        // Diagnostic utile dans la console
+        if (releaseDate === today) {
+            console.log("Sortie trouvée aujourd’hui :", release);
+        }
 
         return releaseDate === today;
     });
 
-    const totalToday = todayReleases.length;
+    const filteredReleases = releasesToday.filter((release) => {
+        if (!search) return true;
 
-    /*
-      Recherche uniquement parmi les sorties du jour.
-    */
-    if (search) {
-        todayReleases = todayReleases.filter(release => {
-            const text = [
-                release.name,
-                release.artist_name,
-                release.album_name,
-                release.release_type
-            ]
-                .filter(Boolean)
-                .join(" ")
-                .toLocaleLowerCase("fr-FR");
+        const text = [
+            release.name,
+            release.artist_name,
+            release.artistName,
+            release.album_name,
+            release.albumName,
+            release.title
+        ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
 
-            return text.includes(search);
-        });
-    }
-
-    const countElement = $("release-count");
+        return text.includes(search);
+    });
 
     if (countElement) {
-        countElement.textContent = formatNumber(totalToday);
+        countElement.textContent = `${filteredReleases.length} sortie${
+            filteredReleases.length > 1 ? "s" : ""
+        }`;
     }
 
-    if (todayReleases.length === 0) {
+    if (filteredReleases.length === 0) {
         container.innerHTML = `
-            <div class="empty">
-                <p>
-                    Aucune sortie trouvée pour
-                    le ${formatDate(today)}.
-                </p>
-
-                <small>
-                    ${formatNumber(releases.length)}
-                    sortie(s) chargée(s) au total.
-                </small>
+            <div class="empty-state">
+                Aucune sortie trouvée pour le ${formatDate(today)}.
             </div>
         `;
-
         return;
     }
 
-    container.innerHTML = todayReleases
-        .map(release => {
+    container.innerHTML = filteredReleases
+        .sort((a, b) => {
+            return String(a.name || "").localeCompare(
+                String(b.name || ""),
+                "fr"
+            );
+        })
+        .map((release) => {
             const title =
                 release.name ||
                 release.album_name ||
+                release.albumName ||
                 "Titre inconnu";
 
             const artist =
                 release.artist_name ||
+                release.artistName ||
                 "Artiste inconnu";
-
-            const album =
-                release.album_name ||
-                "";
 
             const image =
                 release.album_image ||
-                (
-                    Array.isArray(release.images)
-                        ? release.images[0]
-                        : ""
-                );
-
-            const spotifyURL =
-                release.url ||
-                release.external_urls?.spotify ||
+                release.albumImage ||
+                release.image ||
                 "";
 
-            const releaseType =
-                release.release_type ||
-                "Sortie";
+            const url = release.url || release.external_url || "#";
 
             return `
                 <article class="release-card">
@@ -461,48 +476,29 @@ function renderReleases() {
                         image
                             ? `
                                 <img
-                                    class="release-cover"
+                                    class="release-image"
                                     src="${escapeHTML(image)}"
                                     alt="${escapeHTML(title)}"
                                     loading="lazy"
                                 >
                             `
                             : `
-                                <div class="release-cover">
-                                    🎵
+                                <div class="release-image release-image-empty">
+                                    ♪
                                 </div>
                             `
                     }
 
-                    <div class="release-information">
-                        <div class="release-type">
-                            ${escapeHTML(
-                                String(releaseType).toUpperCase()
-                            )}
-                        </div>
-
-                        <h3 class="release-name">
-                            ${escapeHTML(title)}
-                        </h3>
-
-                        <div class="release-artist">
-                            ${escapeHTML(artist)}
-                        </div>
-
-                        <div class="release-album">
-                            ${escapeHTML(album)}
-                        </div>
-
-                        <div class="release-date">
-                            ${formatDate(release.release_date)}
-                        </div>
+                    <div class="release-card-content">
+                        <h3>${escapeHTML(title)}</h3>
+                        <p>${escapeHTML(artist)}</p>
+                        <small>${formatDate(today)}</small>
 
                         ${
-                            spotifyURL
+                            url !== "#"
                                 ? `
                                     <a
-                                        class="spotify-button"
-                                        href="${escapeHTML(spotifyURL)}"
+                                        href="${escapeHTML(url)}"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                     >
