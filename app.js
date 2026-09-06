@@ -29,7 +29,11 @@ function escapeHTML(value) {
 }
 
 function formatNumber(value) {
-    if (value === null || value === undefined || value === "") {
+    if (
+        value === null ||
+        value === undefined ||
+        value === ""
+    ) {
         return "—";
     }
 
@@ -44,9 +48,7 @@ function formatNumber(value) {
 
 
 /* =========================================================
-   DATES
-
-   Toutes les dates sont calculées avec le fuseau Europe/Paris.
+   DATE DU JOUR — EUROPE/PARIS
 ========================================================= */
 
 function getTodayParis() {
@@ -57,41 +59,38 @@ function getTodayParis() {
         day: "2-digit"
     }).formatToParts(new Date());
 
-    const result = {};
+    const date = {};
 
     for (const part of parts) {
         if (part.type !== "literal") {
-            result[part.type] = part.value;
+            date[part.type] = part.value;
         }
     }
 
-    return `${result.year}-${result.month}-${result.day}`;
+    return `${date.year}-${date.month}-${date.day}`;
 }
 
 function formatDate(date) {
     if (!date) {
-        return "";
+        return "—";
     }
 
-    const value = String(date).slice(0, 10);
-    const parts = value.split("-");
+    const cleanDate = String(date).trim().slice(0, 10);
+    const parts = cleanDate.split("-");
 
     if (parts.length !== 3) {
-        return value;
+        return cleanDate;
     }
 
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 function formatReadableDate(date) {
-    if (!date) {
-        return "";
-    }
-
-    const parts = String(date).slice(0, 10).split("-");
+    const cleanDate = String(date).slice(0, 10);
+    const parts = cleanDate.split("-");
 
     if (parts.length !== 3) {
-        return String(date);
+        return cleanDate;
     }
 
     const parsedDate = new Date(
@@ -116,25 +115,53 @@ function normalizeDate(value) {
         return "";
     }
 
-    /*
-      Accepte notamment :
-      2026-09-06
-      2026-09-06T00:00:00Z
-      2026-09-06 00:00:00
-    */
-    return String(value).trim().slice(0, 10);
+    return String(value)
+        .trim()
+        .slice(0, 10);
 }
 
 
 /* =========================================================
-   CHARGEMENT DES JSON
+   AFFICHAGE DE LA DATE DANS LE HTML
+========================================================= */
+
+function displayCurrentDate() {
+    const today = getTodayParis();
+
+    const currentDate = $("current-date");
+
+    if (currentDate) {
+        currentDate.textContent = formatDate(today);
+    }
+
+    const releaseTitle = $("release-title");
+
+    if (releaseTitle) {
+        releaseTitle.textContent =
+            `Nouvelles sorties — ${formatDate(today)}`;
+    }
+
+    const releaseDescription = $("release-description");
+
+    if (releaseDescription) {
+        releaseDescription.textContent =
+            `Sorties prévues le ${formatReadableDate(today)}`;
+    }
+
+    console.log("Date du jour utilisée :", today);
+}
+
+
+/* =========================================================
+   CHARGEMENT DES FICHIERS JSON
 ========================================================= */
 
 async function loadJSON(filePath) {
     const url = new URL(filePath, window.location.href);
-    url.searchParams.set("cache", Date.now());
 
-    console.log("Chargement du fichier :", url.href);
+    url.searchParams.set("t", Date.now());
+
+    console.log("Chargement :", url.href);
 
     const response = await fetch(url.href, {
         method: "GET",
@@ -143,7 +170,7 @@ async function loadJSON(filePath) {
 
     if (!response.ok) {
         throw new Error(
-            `Impossible de charger ${url.pathname} — erreur HTTP ${response.status}`
+            `Erreur HTTP ${response.status} pour ${url.pathname}`
         );
     }
 
@@ -157,14 +184,14 @@ async function loadJSON(filePath) {
         return JSON.parse(text);
     } catch (error) {
         throw new Error(
-            `${url.pathname} ne contient pas un JSON valide : ${error.message}`
+            `Le fichier ${url.pathname} n'est pas un JSON valide : ${error.message}`
         );
     }
 }
 
 
 /* =========================================================
-   NORMALISATION DES ARTISTES
+   LECTURE DU JSON ARTISTES
 ========================================================= */
 
 function parseArtists(data) {
@@ -182,24 +209,28 @@ function parseArtists(data) {
         return data.artists.filter(Boolean);
     }
 
-    // Format : { artists: { "id": {...}, "id2": {...} } }
+    // Format : { artists: { id: {...} } }
     if (
         data.artists &&
         typeof data.artists === "object"
     ) {
         return Object.values(data.artists).filter(
-            artist => artist && typeof artist === "object"
+            artist =>
+                artist &&
+                typeof artist === "object"
         );
     }
 
-    // Format : { "id1": {...}, "id2": {...} }
+    // Format : { id1: {...}, id2: {...} }
     if (
         typeof data === "object" &&
         !data.id &&
         !data.name
     ) {
         return Object.values(data).filter(
-            artist => artist && typeof artist === "object"
+            artist =>
+                artist &&
+                typeof artist === "object"
         );
     }
 
@@ -217,7 +248,7 @@ function parseArtists(data) {
 
 
 /* =========================================================
-   NORMALISATION DES SORTIES
+   LECTURE DU JSON SORTIES
 ========================================================= */
 
 function parseReleases(data) {
@@ -240,13 +271,12 @@ function parseReleases(data) {
         return data.tracks.filter(Boolean);
     }
 
-    // Format :
-    // {
-    //   "releases": {
-    //      "2026-09-06": [...],
-    //      "2026-09-07": [...]
-    //   }
-    // }
+    // Format : { albums: [...] }
+    if (Array.isArray(data.albums)) {
+        return data.albums.filter(Boolean);
+    }
+
+    // Format : { releases: { id1: {...} } }
     if (
         data.releases &&
         typeof data.releases === "object"
@@ -256,13 +286,7 @@ function parseReleases(data) {
             .filter(Boolean);
     }
 
-    // Format :
-    // {
-    //   "tracks": {
-    //      "id1": {...},
-    //      "id2": {...}
-    //   }
-    // }
+    // Format : { tracks: { id1: {...} } }
     if (
         data.tracks &&
         typeof data.tracks === "object"
@@ -270,11 +294,15 @@ function parseReleases(data) {
         return Object.values(data.tracks).filter(Boolean);
     }
 
-    // Format :
-    // {
-    //   "id1": {...},
-    //   "id2": {...}
-    // }
+    // Format : { albums: { id1: {...} } }
+    if (
+        data.albums &&
+        typeof data.albums === "object"
+    ) {
+        return Object.values(data.albums).filter(Boolean);
+    }
+
+    // Format : { id1: {...}, id2: {...} }
     if (
         typeof data === "object" &&
         !data.id &&
@@ -282,7 +310,9 @@ function parseReleases(data) {
         !data.release_date
     ) {
         return Object.values(data).filter(
-            release => release && typeof release === "object"
+            release =>
+                release &&
+                typeof release === "object"
         );
     }
 
@@ -301,48 +331,11 @@ function parseReleases(data) {
 
 
 /* =========================================================
-   AFFICHAGE DE LA DATE DU JOUR
-========================================================= */
-
-function displayCurrentDate() {
-    const today = getTodayParis();
-
-    const currentDateElement = $("current-date");
-
-    if (currentDateElement) {
-        currentDateElement.textContent = formatDate(today);
-    }
-
-    const todayDateElement = $("today-date");
-
-    if (todayDateElement) {
-        todayDateElement.textContent = formatReadableDate(today);
-    }
-
-    const releaseTitleElement = $("release-title");
-
-    if (releaseTitleElement) {
-        releaseTitleElement.textContent =
-            `Nouvelles sorties — ${formatDate(today)}`;
-    }
-
-    const releaseDescriptionElement = $("release-description");
-
-    if (releaseDescriptionElement) {
-        releaseDescriptionElement.textContent =
-            `Sorties du ${formatReadableDate(today)}`;
-    }
-
-    console.log("Date utilisée pour le filtre :", today);
-}
-
-
-/* =========================================================
    RECHERCHE
 ========================================================= */
 
-function getSearchValue(elementId) {
-    const element = $(elementId);
+function getSearchValue(id) {
+    const element = $(id);
 
     if (!element) {
         return "";
@@ -362,31 +355,37 @@ function renderReleases() {
     const container = $("release-list");
 
     if (!container) {
-        console.error("Élément #release-list introuvable dans le HTML.");
+        console.error(
+            "L'élément #release-list est introuvable."
+        );
         return;
     }
 
     const today = getTodayParis();
     const search = getSearchValue("release-search");
 
-    console.log("Toutes les sorties chargées :", releases.length);
+    console.log("Nombre total de sorties :", releases.length);
     console.log("Date recherchée :", today);
 
+    /*
+      On filtre obligatoirement sur la date du jour.
+    */
     let todayReleases = releases.filter(release => {
-        if (!release || !release.release_date) {
-            return false;
-        }
-
-        const releaseDate = normalizeDate(release.release_date);
+        const releaseDate = normalizeDate(
+            release.release_date
+        );
 
         return releaseDate === today;
     });
 
     const totalToday = todayReleases.length;
 
+    /*
+      Recherche uniquement parmi les sorties du jour.
+    */
     if (search) {
         todayReleases = todayReleases.filter(release => {
-            const searchableText = [
+            const text = [
                 release.name,
                 release.artist_name,
                 release.album_name,
@@ -396,7 +395,7 @@ function renderReleases() {
                 .join(" ")
                 .toLocaleLowerCase("fr-FR");
 
-            return searchableText.includes(search);
+            return text.includes(search);
         });
     }
 
@@ -409,10 +408,14 @@ function renderReleases() {
     if (todayReleases.length === 0) {
         container.innerHTML = `
             <div class="empty">
-                <div>🎵</div>
-                <p>Aucune sortie trouvée pour le ${formatDate(today)}.</p>
+                <p>
+                    Aucune sortie trouvée pour
+                    le ${formatDate(today)}.
+                </p>
+
                 <small>
-                    ${releases.length} sortie(s) chargée(s) au total.
+                    ${formatNumber(releases.length)}
+                    sortie(s) chargée(s) au total.
                 </small>
             </div>
         `;
@@ -432,7 +435,8 @@ function renderReleases() {
                 "Artiste inconnu";
 
             const album =
-                release.album_name || "";
+                release.album_name ||
+                "";
 
             const image =
                 release.album_image ||
@@ -472,12 +476,14 @@ function renderReleases() {
 
                     <div class="release-information">
                         <div class="release-type">
-                            ${escapeHTML(releaseType.toUpperCase())}
+                            ${escapeHTML(
+                                String(releaseType).toUpperCase()
+                            )}
                         </div>
 
-                        <div class="release-name">
+                        <h3 class="release-name">
                             ${escapeHTML(title)}
-                        </div>
+                        </h3>
 
                         <div class="release-artist">
                             ${escapeHTML(artist)}
@@ -485,7 +491,10 @@ function renderReleases() {
 
                         <div class="release-album">
                             ${escapeHTML(album)}
-                            · ${formatDate(release.release_date)}
+                        </div>
+
+                        <div class="release-date">
+                            ${formatDate(release.release_date)}
                         </div>
 
                         ${
@@ -518,13 +527,17 @@ function renderArtists() {
     const container = $("artist-table");
 
     if (!container) {
-        console.error("Élément #artist-table introuvable dans le HTML.");
+        console.error(
+            "L'élément #artist-table est introuvable."
+        );
         return;
     }
 
     const search = getSearchValue("artist-search");
     const sortElement = $("artist-sort");
-    const sort = sortElement ? sortElement.value : "name";
+    const sort = sortElement
+        ? sortElement.value
+        : "name";
 
     let filteredArtists = artists.filter(artist => {
         const name =
@@ -539,29 +552,25 @@ function renderArtists() {
 
     if (sort === "followers") {
         filteredArtists.sort((a, b) => {
-            return (
-                Number(b.followers || 0) -
-                Number(a.followers || 0)
-            );
-        });
-    } else if (sort === "monthly_listeners") {
-        filteredArtists.sort((a, b) => {
-            return (
-                Number(b.monthly_listeners || 0) -
-                Number(a.monthly_listeners || 0)
-            );
+            return Number(b.followers || 0) -
+                Number(a.followers || 0);
         });
     } else if (sort === "popularity") {
         filteredArtists.sort((a, b) => {
-            return (
-                Number(b.popularity || 0) -
-                Number(a.popularity || 0)
-            );
+            return Number(b.popularity || 0) -
+                Number(a.popularity || 0);
         });
     } else {
         filteredArtists.sort((a, b) => {
-            const nameA = a.name || a.artist_name || "";
-            const nameB = b.name || b.artist_name || "";
+            const nameA =
+                a.name ||
+                a.artist_name ||
+                "";
+
+            const nameB =
+                b.name ||
+                b.artist_name ||
+                "";
 
             return nameA.localeCompare(
                 nameB,
@@ -574,7 +583,8 @@ function renderArtists() {
     const artistCount = $("artist-count");
 
     if (artistCount) {
-        artistCount.textContent = formatNumber(artists.length);
+        artistCount.textContent =
+            formatNumber(artists.length);
     }
 
     if (filteredArtists.length === 0) {
@@ -629,14 +639,18 @@ function renderArtists() {
                     </td>
 
                     <td>
-                        ${formatNumber(artist.monthly_listeners)}
+                        ${formatNumber(
+                            artist.monthly_listeners
+                        )}
                     </td>
 
                     <td>
                         ${
                             artist.popularity !== undefined &&
                             artist.popularity !== null
-                                ? escapeHTML(artist.popularity)
+                                ? escapeHTML(
+                                    artist.popularity
+                                )
                                 : "—"
                         }
                     </td>
@@ -676,14 +690,19 @@ function renderGenres() {
     const container = $("genre-list");
 
     if (!container) {
-        console.error("Élément #genre-list introuvable dans le HTML.");
+        console.error(
+            "L'élément #genre-list est introuvable."
+        );
         return;
     }
 
     const genreCounts = {};
 
     for (const artist of artists) {
-        if (!artist || !Array.isArray(artist.genres)) {
+        if (
+            !artist ||
+            !Array.isArray(artist.genres)
+        ) {
             continue;
         }
 
@@ -739,8 +758,11 @@ function renderGenres() {
 ========================================================= */
 
 function setupNavigation() {
-    const buttons = document.querySelectorAll(".nav-button");
-    const pages = document.querySelectorAll(".page");
+    const buttons =
+        document.querySelectorAll(".nav-button");
+
+    const pages =
+        document.querySelectorAll(".page");
 
     buttons.forEach(button => {
         button.addEventListener("click", () => {
@@ -771,58 +793,6 @@ function setupNavigation() {
 
 
 /* =========================================================
-   AFFICHAGE DES ERREURS
-========================================================= */
-
-function displayLoadingError(error) {
-    console.error("Erreur de chargement :", error);
-
-    const message = `
-        <div class="empty">
-            <strong>Erreur de chargement</strong>
-            <p>${escapeHTML(error.message)}</p>
-            <p>
-                Vérifie que ces fichiers existent bien sur GitHub :
-            </p>
-            <code>data/artistes.json</code>
-            <br>
-            <code>data/sorties.json</code>
-        </div>
-    `;
-
-    const releaseList = $("release-list");
-
-    if (releaseList) {
-        releaseList.innerHTML = message;
-    }
-
-    const artistTable = $("artist-table");
-
-    if (artistTable) {
-        artistTable.innerHTML = `
-            <tr>
-                <td colspan="6" class="muted">
-                    Impossible de charger les artistes.
-                    <br>
-                    ${escapeHTML(error.message)}
-                </td>
-            </tr>
-        `;
-    }
-
-    const genreList = $("genre-list");
-
-    if (genreList) {
-        genreList.innerHTML = `
-            <div class="empty">
-                Impossible de charger les genres.
-            </div>
-        `;
-    }
-}
-
-
-/* =========================================================
    INITIALISATION
 ========================================================= */
 
@@ -830,38 +800,91 @@ async function initialize() {
     displayCurrentDate();
 
     try {
-        console.log("Début du chargement des données.");
+        const [artistsData, releasesData] =
+            await Promise.all([
+                loadJSON(ARTISTS_FILE),
+                loadJSON(RELEASES_FILE)
+            ]);
 
-        const [artistsData, releasesData] = await Promise.all([
-            loadJSON(ARTISTS_FILE),
-            loadJSON(RELEASES_FILE)
-        ]);
+        console.log(
+            "Contenu du JSON artistes :",
+            artistsData
+        );
 
-        console.log("JSON artistes reçu :", artistsData);
-        console.log("JSON sorties reçu :", releasesData);
+        console.log(
+            "Contenu du JSON sorties :",
+            releasesData
+        );
 
         artists = parseArtists(artistsData);
         releases = parseReleases(releasesData);
 
-        console.log("Nombre d’artistes :", artists.length);
-        console.log("Nombre de sorties :", releases.length);
-
-        const today = getTodayParis();
-
-        const releasesToday = releases.filter(release => {
-            return normalizeDate(release.release_date) === today;
-        });
+        console.log(
+            "Nombre d'artistes après lecture :",
+            artists.length
+        );
 
         console.log(
-            `Nombre de sorties pour ${today} :`,
-            releasesToday.length
+            "Nombre de sorties après lecture :",
+            releases.length
+        );
+
+        console.log(
+            "Date actuelle utilisée :",
+            getTodayParis()
         );
 
         renderArtists();
         renderReleases();
         renderGenres();
     } catch (error) {
-        displayLoadingError(error);
+        console.error(
+            "Erreur pendant le chargement :",
+            error
+        );
+
+        const releaseList = $("release-list");
+
+        if (releaseList) {
+            releaseList.innerHTML = `
+                <div class="empty">
+                    <strong>Erreur de chargement</strong>
+                    <p>
+                        ${escapeHTML(error.message)}
+                    </p>
+                    <p>
+                        Vérifie les fichiers :
+                    </p>
+                    <code>data/artistes.json</code>
+                    <br>
+                    <code>data/sorties.json</code>
+                </div>
+            `;
+        }
+
+        const artistTable = $("artist-table");
+
+        if (artistTable) {
+            artistTable.innerHTML = `
+                <tr>
+                    <td colspan="6" class="muted">
+                        Impossible de charger les artistes.
+                        <br>
+                        ${escapeHTML(error.message)}
+                    </td>
+                </tr>
+            `;
+        }
+
+        const genreList = $("genre-list");
+
+        if (genreList) {
+            genreList.innerHTML = `
+                <div class="empty">
+                    Impossible de charger les genres.
+                </div>
+            `;
+        }
     }
 }
 
@@ -874,19 +897,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const artistSearch = $("artist-search");
 
     if (artistSearch) {
-        artistSearch.addEventListener("input", renderArtists);
+        artistSearch.addEventListener(
+            "input",
+            renderArtists
+        );
     }
 
     const artistSort = $("artist-sort");
 
     if (artistSort) {
-        artistSort.addEventListener("change", renderArtists);
+        artistSort.addEventListener(
+            "change",
+            renderArtists
+        );
     }
 
     const releaseSearch = $("release-search");
 
     if (releaseSearch) {
-        releaseSearch.addEventListener("input", renderReleases);
+        releaseSearch.addEventListener(
+            "input",
+            renderReleases
+        );
     }
 
     setupNavigation();
