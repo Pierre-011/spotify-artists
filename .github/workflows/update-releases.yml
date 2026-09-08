@@ -2,8 +2,7 @@ name: Mise à jour des sorties
 
 on:
   schedule:
-    - cron: "0 5 * * *"
-    timezone: 'Europe/Paris'
+    - cron: "0 3 * * *"
   workflow_dispatch:
   repository_dispatch:
     types: [run-releases-update]
