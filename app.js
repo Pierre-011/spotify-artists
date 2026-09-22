@@ -1,4 +1,3 @@
-javascript
 "use strict";
 
 const ARTISTS_FILE = "./data/artistes.json";
