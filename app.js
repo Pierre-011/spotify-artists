@@ -6,9 +6,15 @@ const RELEASES_FILE = "./data/sorties.json";
 let artists = [];
 let releases = [];
 
+
+/* =========================================================
+   UTILITAIRES
+   ========================================================= */
+
 function $(id) {
     return document.getElementById(id);
 }
+
 
 function escapeHTML(value) {
     return String(value ?? "")
@@ -18,6 +24,7 @@ function escapeHTML(value) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
+
 
 function formatNumber(value) {
     if (value === null || value === undefined || value === "") {
@@ -32,6 +39,11 @@ function formatNumber(value) {
 
     return new Intl.NumberFormat("fr-FR").format(number);
 }
+
+
+/* =========================================================
+   DATES
+   ========================================================= */
 
 function getTodayParis() {
     const parts = new Intl.DateTimeFormat("en-CA", {
@@ -52,22 +64,30 @@ function getTodayParis() {
     return `${date.year}-${date.month}-${date.day}`;
 }
 
+
 function formatDate(date) {
     if (!date) return "—";
 
     const cleanDate = String(date).trim().slice(0, 10);
     const parts = cleanDate.split("-");
 
-    if (parts.length !== 3) return cleanDate;
+    if (parts.length !== 3) {
+        return cleanDate;
+    }
 
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
+
 function formatReadableDate(date) {
+    if (!date) return "Date inconnue";
+
     const cleanDate = String(date).slice(0, 10);
     const parts = cleanDate.split("-");
 
-    if (parts.length !== 3) return cleanDate;
+    if (parts.length !== 3) {
+        return cleanDate;
+    }
 
     const parsedDate = new Date(
         Number(parts[0]),
@@ -86,6 +106,7 @@ function formatReadableDate(date) {
     });
 }
 
+
 function displayCurrentDate() {
     const today = getTodayParis();
 
@@ -98,7 +119,8 @@ function displayCurrentDate() {
     const releaseTitle = $("release-title");
 
     if (releaseTitle) {
-        releaseTitle.textContent = `Nouvelles sorties — ${formatDate(today)}`;
+        releaseTitle.textContent =
+            `Nouvelles sorties — ${formatDate(today)}`;
     }
 
     const releaseDescription = $("release-description");
@@ -109,15 +131,29 @@ function displayCurrentDate() {
     }
 }
 
+
+/* =========================================================
+   CHARGEMENT JSON
+   ========================================================= */
+
 async function loadJSON(filePath) {
-    const url = new URL(filePath, window.location.href);
+    const url = new URL(
+        filePath,
+        window.location.href
+    );
 
-    url.searchParams.set("t", Date.now());
+    url.searchParams.set(
+        "t",
+        Date.now()
+    );
 
-    const response = await fetch(url.href, {
-        method: "GET",
-        cache: "no-store"
-    });
+    const response = await fetch(
+        url.href,
+        {
+            method: "GET",
+            cache: "no-store"
+        }
+    );
 
     if (!response.ok) {
         throw new Error(
@@ -128,11 +164,18 @@ async function loadJSON(filePath) {
     const text = await response.text();
 
     if (!text.trim()) {
-        throw new Error(`${url.pathname} est vide.`);
+        throw new Error(
+            `${url.pathname} est vide.`
+        );
     }
 
     return JSON.parse(text);
 }
+
+
+/* =========================================================
+   PARSING ARTISTES
+   ========================================================= */
 
 function parseArtists(data) {
     if (!data) return [];
@@ -145,9 +188,16 @@ function parseArtists(data) {
         return data.artists.filter(Boolean);
     }
 
-    if (data.artists && typeof data.artists === "object") {
+    if (
+        data.artists &&
+        typeof data.artists === "object"
+    ) {
         return Object.values(data.artists)
-            .filter(a => a && typeof a === "object");
+            .filter(
+                artist =>
+                    artist &&
+                    typeof artist === "object"
+            );
     }
 
     if (
@@ -156,15 +206,28 @@ function parseArtists(data) {
         !data.name
     ) {
         return Object.values(data)
-            .filter(a => a && typeof a === "object");
+            .filter(
+                artist =>
+                    artist &&
+                    typeof artist === "object"
+            );
     }
 
-    if (data.id || data.name || data.artist_name) {
+    if (
+        data.id ||
+        data.name ||
+        data.artist_name
+    ) {
         return [data];
     }
 
     return [];
 }
+
+
+/* =========================================================
+   PARSING SORTIES
+   ========================================================= */
 
 function parseReleases(data) {
     if (!data) return [];
@@ -217,7 +280,11 @@ function parseReleases(data) {
         !data.release_date
     ) {
         return Object.values(data)
-            .filter(r => r && typeof r === "object");
+            .filter(
+                release =>
+                    release &&
+                    typeof release === "object"
+            );
     }
 
     if (
@@ -232,13 +299,25 @@ function parseReleases(data) {
     return [];
 }
 
+
+/* =========================================================
+   RECHERCHE
+   ========================================================= */
+
 function getSearchValue(id) {
     const element = $(id);
 
     return element
-        ? element.value.trim().toLocaleLowerCase("fr-FR")
+        ? element.value
+            .trim()
+            .toLocaleLowerCase("fr-FR")
         : "";
 }
+
+
+/* =========================================================
+   DATE D'UNE SORTIE
+   ========================================================= */
 
 function getReleaseDate(release) {
     if (!release) return "";
@@ -255,18 +334,23 @@ function getReleaseDate(release) {
 
     const value = String(rawDate).trim();
 
-    const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    const isoMatch =
+        value.match(/^(\d{4}-\d{2}-\d{2})/);
 
     if (isoMatch) {
         return isoMatch[1];
     }
 
-    const frenchMatch = value.match(
-        /^(\d{2})\/(\d{2})\/(\d{4})/
-    );
+    const frenchMatch =
+        value.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
 
     if (frenchMatch) {
-        const [, day, month, year] = frenchMatch;
+        const [
+            ,
+            day,
+            month,
+            year
+        ] = frenchMatch;
 
         return `${year}-${month}-${day}`;
     }
@@ -289,293 +373,509 @@ function renderReleases() {
     const today = getTodayParis();
 
     const search = searchElement
-        ? searchElement.value.trim().toLowerCase()
+        ? searchElement.value
+            .trim()
+            .toLocaleLowerCase("fr-FR")
         : "";
 
-    const releasesToday = releases.filter(
-        release => getReleaseDate(release) === today
-    );
+    const releasesToday =
+        releases.filter(
+            release =>
+                getReleaseDate(release) === today
+        );
 
-    const filteredReleases = releasesToday.filter(release => {
-        if (!search) return true;
+    const filteredReleases =
+        releasesToday.filter(release => {
 
-        const text = [
-            release.name,
-            release.artist_name,
-            release.artistName,
-            release.album_name,
-            release.albumName,
-            release.title
-        ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
+            if (!search) return true;
 
-        return text.includes(search);
-    });
+            const text = [
+                release.name,
+                release.artist_name,
+                release.artistName,
+                release.album_name,
+                release.albumName,
+                release.title
+            ]
+                .filter(Boolean)
+                .join(" ")
+                .toLocaleLowerCase("fr-FR");
+
+            return text.includes(search);
+        });
 
     if (countElement) {
         countElement.textContent =
-            `${filteredReleases.length}`;
+            filteredReleases.length;
     }
 
     if (filteredReleases.length === 0) {
+
         container.innerHTML = `
             <div class="empty">
-                Aucune sortie trouvée pour le ${formatDate(today)}.
+                Aucune sortie trouvée pour le
+                ${formatDate(today)}.
             </div>
         `;
 
         return;
     }
 
-    container.innerHTML = filteredReleases
-        .sort((a, b) =>
-            String(a.name || "").localeCompare(
-                String(b.name || ""),
-                "fr"
+    container.innerHTML =
+        [...filteredReleases]
+            .sort((a, b) =>
+                String(
+                    a.name ||
+                    a.album_name ||
+                    ""
+                ).localeCompare(
+                    String(
+                        b.name ||
+                        b.album_name ||
+                        ""
+                    ),
+                    "fr"
+                )
             )
-        )
-        .map(release => {
-            const title =
-                release.name ||
-                release.album_name ||
-                release.albumName ||
-                "Titre inconnu";
+            .map(release => {
 
-            const artist =
-                release.artist_name ||
-                release.artistName ||
-                "Artiste inconnu";
+                const title =
+                    release.name ||
+                    release.album_name ||
+                    release.albumName ||
+                    "Titre inconnu";
 
-            const image =
-                release.album_image ||
-                release.albumImage ||
-                release.image ||
-                "";
+                const artist =
+                    release.artist_name ||
+                    release.artistName ||
+                    "Artiste inconnu";
 
-            const url =
-                release.url ||
-                release.external_url ||
-                "#";
+                const image =
+                    release.album_image ||
+                    release.albumImage ||
+                    release.image ||
+                    "";
 
-            return `
-                <article class="release-card">
+                const url =
+                    release.url ||
+                    release.external_url ||
+                    "#";
 
-                    ${
-                        image
-                            ? `
-                                <img
-                                    class="release-cover"
-                                    src="${escapeHTML(image)}"
-                                    alt="${escapeHTML(title)}"
-                                    loading="lazy"
-                                >
-                            `
-                            : `
-                                <div class="release-cover"></div>
-                            `
-                    }
-
-                    <div class="release-information">
-
-                        <div class="release-type">
-                            SORTIE DU JOUR
-                        </div>
-
-                        <div class="release-name">
-                            ${escapeHTML(title)}
-                        </div>
-
-                        <div class="release-artist">
-                            ${escapeHTML(artist)}
-                        </div>
-
-                        <div class="release-album">
-                            ${formatDate(today)}
-                        </div>
+                return `
+                    <article class="release-card">
 
                         ${
-                            url !== "#"
+                            image
                                 ? `
-                                    <a
-                                        class="spotify-button"
-                                        href="${escapeHTML(url)}"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <img
+                                        class="release-cover"
+                                        src="${escapeHTML(image)}"
+                                        alt="${escapeHTML(title)}"
+                                        loading="lazy"
                                     >
-                                        Écouter sur Spotify
-                                    </a>
                                 `
-                                : ""
+                                : `
+                                    <div class="release-cover"></div>
+                                `
                         }
 
-                    </div>
+                        <div class="release-information">
 
-                </article>
-            `;
-        })
-        .join("");
+                            <div class="release-type">
+                                SORTIE DU JOUR
+                            </div>
+
+                            <div class="release-name">
+                                ${escapeHTML(title)}
+                            </div>
+
+                            <div class="release-artist">
+                                ${escapeHTML(artist)}
+                            </div>
+
+                            <div class="release-album">
+                                ${formatDate(today)}
+                            </div>
+
+                            ${
+                                url !== "#"
+                                    ? `
+                                        <a
+                                            class="spotify-button"
+                                            href="${escapeHTML(url)}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            Écouter sur Spotify
+                                        </a>
+                                    `
+                                    : ""
+                            }
+
+                        </div>
+
+                    </article>
+                `;
+            })
+            .join("");
 }
 
 
 /* =========================================================
    TOUTES LES SORTIES
+   REGROUPEMENT PAR DATE
    ========================================================= */
 
 function renderAllReleases() {
-    const container = $("all-release-list");
-    const countElement = $("all-release-count");
-    const searchElement = $("all-release-search");
-    const sortElement = $("all-release-sort");
+    const container =
+        $("all-release-list");
+
+    const countElement =
+        $("all-release-count");
+
+    const searchElement =
+        $("all-release-search");
+
+    const sortElement =
+        $("all-release-sort");
 
     if (!container) return;
 
     const search = searchElement
-        ? searchElement.value.trim().toLowerCase()
+        ? searchElement.value
+            .trim()
+            .toLocaleLowerCase("fr-FR")
         : "";
 
     const sort = sortElement
         ? sortElement.value
         : "newest";
 
-    let filteredReleases = releases.filter(release => {
-        if (!search) return true;
 
-        const text = [
-            release.name,
-            release.title,
-            release.album_name,
-            release.albumName,
-            release.artist_name,
-            release.artistName
-        ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
+    /* -----------------------------------------
+       Recherche
+       ----------------------------------------- */
 
-        return text.includes(search);
-    });
+    let filteredReleases =
+        releases.filter(release => {
 
-    /*
-     * Tri par date.
-     *
-     * Date la plus récente en premier par défaut.
-     */
-    filteredReleases.sort((a, b) => {
-        const dateA = getReleaseDate(a);
-        const dateB = getReleaseDate(b);
+            if (!search) {
+                return true;
+            }
 
-        if (!dateA && !dateB) return 0;
-        if (!dateA) return 1;
-        if (!dateB) return -1;
+            const text = [
+                release.name,
+                release.title,
+                release.album_name,
+                release.albumName,
+                release.artist_name,
+                release.artistName
+            ]
+                .filter(Boolean)
+                .join(" ")
+                .toLocaleLowerCase("fr-FR");
 
-        return sort === "oldest"
-            ? dateA.localeCompare(dateB)
-            : dateB.localeCompare(dateA);
-    });
+            return text.includes(search);
+        });
+
+
+    /* -----------------------------------------
+       Tri
+       ----------------------------------------- */
+
+    filteredReleases =
+        [...filteredReleases].sort(
+            (a, b) => {
+
+                const dateA =
+                    getReleaseDate(a);
+
+                const dateB =
+                    getReleaseDate(b);
+
+                if (!dateA && !dateB) {
+                    return 0;
+                }
+
+                if (!dateA) {
+                    return 1;
+                }
+
+                if (!dateB) {
+                    return -1;
+                }
+
+                return sort === "oldest"
+                    ? dateA.localeCompare(dateB)
+                    : dateB.localeCompare(dateA);
+            }
+        );
+
+
+    /* -----------------------------------------
+       Compteur
+       ----------------------------------------- */
 
     if (countElement) {
         countElement.textContent =
-            formatNumber(filteredReleases.length);
+            formatNumber(
+                filteredReleases.length
+            );
     }
 
+
+    /* -----------------------------------------
+       Aucun résultat
+       ----------------------------------------- */
+
     if (filteredReleases.length === 0) {
+
         container.innerHTML = `
-            <div class="empty">
-                Aucune sortie trouvée.
+            <div class="empty all-release-empty">
+
+                <div class="empty-icon">
+                    🎵
+                </div>
+
+                <strong>
+                    Aucune sortie trouvée
+                </strong>
+
+                <p>
+                    Essayez une autre recherche.
+                </p>
+
             </div>
         `;
 
         return;
     }
 
-    container.innerHTML = filteredReleases
-        .map(release => {
 
-            const title =
-                release.name ||
-                release.album_name ||
-                release.albumName ||
-                release.title ||
-                "Titre inconnu";
+    /* -----------------------------------------
+       Regroupement par date
+       ----------------------------------------- */
 
-            const artist =
-                release.artist_name ||
-                release.artistName ||
-                "Artiste inconnu";
+    const groups = {};
 
-            const image =
-                release.album_image ||
-                release.albumImage ||
-                release.image ||
-                "";
+    for (const release of filteredReleases) {
 
-            const url =
-                release.url ||
-                release.external_url ||
-                release.external_urls?.spotify ||
-                "#";
+        const date =
+            getReleaseDate(release) ||
+            "unknown";
 
-            const date = getReleaseDate(release);
+        if (!groups[date]) {
+            groups[date] = [];
+        }
 
-            return `
-                <article class="release-card">
+        groups[date].push(release);
+    }
 
-                    ${
-                        image
-                            ? `
-                                <img
-                                    class="release-cover"
-                                    src="${escapeHTML(image)}"
-                                    alt="${escapeHTML(title)}"
-                                    loading="lazy"
-                                >
-                            `
-                            : `
-                                <div class="release-cover"></div>
-                            `
-                    }
 
-                    <div class="release-information">
+    /* -----------------------------------------
+       Génération HTML
+       ----------------------------------------- */
 
-                        <div class="release-type">
-                            ${date ? "SORTIE" : "DATE INCONNUE"}
-                        </div>
+    container.innerHTML =
+        Object.entries(groups)
+            .map(
+                ([date, dateReleases]) => {
 
-                        <div class="release-name">
-                            ${escapeHTML(title)}
-                        </div>
+                    const readableDate =
+                        date === "unknown"
+                            ? "Date inconnue"
+                            : formatReadableDate(date);
 
-                        <div class="release-artist">
-                            ${escapeHTML(artist)}
-                        </div>
 
-                        <div class="release-album">
-                            ${date ? formatDate(date) : "—"}
-                        </div>
+                    return `
+                        <section class="release-day">
 
-                        ${
-                            url !== "#"
-                                ? `
-                                    <a
-                                        class="spotify-button"
-                                        href="${escapeHTML(url)}"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        Écouter sur Spotify
-                                    </a>
-                                `
-                                : ""
-                        }
+                            <div class="release-day-header">
 
-                    </div>
+                                <div>
 
-                </article>
-            `;
-        })
-        .join("");
+                                    <span class="release-day-label">
+                                        ${
+                                            date === "unknown"
+                                                ? "DATE INCONNUE"
+                                                : "SORTIES"
+                                        }
+                                    </span>
+
+                                    <h3>
+                                        ${escapeHTML(
+                                            readableDate
+                                        )}
+                                    </h3>
+
+                                </div>
+
+
+                                <span class="release-day-count">
+
+                                    ${formatNumber(
+                                        dateReleases.length
+                                    )}
+
+                                    ${
+                                        dateReleases.length > 1
+                                            ? "sorties"
+                                            : "sortie"
+                                    }
+
+                                </span>
+
+                            </div>
+
+
+                            <div class="release-day-grid">
+
+                                ${
+                                    dateReleases
+                                        .map(
+                                            release => {
+
+                                                const title =
+                                                    release.name ||
+                                                    release.album_name ||
+                                                    release.albumName ||
+                                                    release.title ||
+                                                    "Titre inconnu";
+
+                                                const artist =
+                                                    release.artist_name ||
+                                                    release.artistName ||
+                                                    "Artiste inconnu";
+
+                                                const image =
+                                                    release.album_image ||
+                                                    release.albumImage ||
+                                                    release.image ||
+                                                    "";
+
+                                                const url =
+                                                    release.url ||
+                                                    release.external_url ||
+                                                    release.external_urls?.spotify ||
+                                                    "";
+
+                                                const releaseType =
+                                                    release.release_type ||
+                                                    "release";
+
+
+                                                return `
+                                                    <article class="catalog-release-card">
+
+                                                        <div class="catalog-cover-wrapper">
+
+                                                            ${
+                                                                image
+                                                                    ? `
+                                                                        <img
+                                                                            class="catalog-cover"
+                                                                            src="${escapeHTML(image)}"
+                                                                            alt="${escapeHTML(title)}"
+                                                                            loading="lazy"
+                                                                        >
+                                                                    `
+                                                                    : `
+                                                                        <div class="catalog-cover catalog-cover-empty">
+                                                                            <span>♪</span>
+                                                                        </div>
+                                                                    `
+                                                            }
+
+
+                                                            ${
+                                                                url
+                                                                    ? `
+                                                                        <a
+                                                                            class="catalog-play"
+                                                                            href="${escapeHTML(url)}"
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            aria-label="Écouter ${escapeHTML(title)} sur Spotify"
+                                                                        >
+                                                                            ▶
+                                                                        </a>
+                                                                    `
+                                                                    : ""
+                                                            }
+
+                                                        </div>
+
+
+                                                        <div class="catalog-information">
+
+                                                            <div class="catalog-type">
+                                                                ${escapeHTML(
+                                                                    String(
+                                                                        releaseType
+                                                                    ).toUpperCase()
+                                                                )}
+                                                            </div>
+
+
+                                                            <div
+                                                                class="catalog-title"
+                                                                title="${escapeHTML(title)}"
+                                                            >
+                                                                ${escapeHTML(title)}
+                                                            </div>
+
+
+                                                            <div
+                                                                class="catalog-artist"
+                                                                title="${escapeHTML(artist)}"
+                                                            >
+                                                                ${escapeHTML(artist)}
+                                                            </div>
+
+
+                                                            <div class="catalog-footer">
+
+                                                                <span>
+                                                                    ${
+                                                                        date === "unknown"
+                                                                            ? "—"
+                                                                            : formatDate(date)
+                                                                    }
+                                                                </span>
+
+
+                                                                ${
+                                                                    url
+                                                                        ? `
+                                                                            <a
+                                                                                href="${escapeHTML(url)}"
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                            >
+                                                                                Spotify ↗
+                                                                            </a>
+                                                                        `
+                                                                        : ""
+                                                                }
+
+                                                            </div>
+
+                                                        </div>
+
+                                                    </article>
+                                                `;
+                                            }
+                                        )
+                                        .join("")
+                                }
+
+                            </div>
+
+                        </section>
+                    `;
+                }
+            )
+            .join("");
 }
 
 
@@ -584,30 +884,40 @@ function renderAllReleases() {
    ========================================================= */
 
 function renderArtists() {
-    const container = $("artist-table");
+
+    const container =
+        $("artist-table");
 
     if (!container) return;
 
-    const search = getSearchValue("artist-search");
+    const search =
+        getSearchValue("artist-search");
 
-    const sortElement = $("artist-sort");
+    const sortElement =
+        $("artist-sort");
 
-    const sort = sortElement
-        ? sortElement.value
-        : "name";
+    const sort =
+        sortElement
+            ? sortElement.value
+            : "name";
 
-    let filteredArtists = artists.filter(artist => {
-        const name =
-            artist.name ||
-            artist.artist_name ||
-            "";
 
-        return name
-            .toLocaleLowerCase("fr-FR")
-            .includes(search);
-    });
+    let filteredArtists =
+        artists.filter(artist => {
+
+            const name =
+                artist.name ||
+                artist.artist_name ||
+                "";
+
+            return name
+                .toLocaleLowerCase("fr-FR")
+                .includes(search);
+        });
+
 
     if (sort === "followers") {
+
         filteredArtists.sort(
             (a, b) =>
                 Number(b.followers || 0) -
@@ -615,6 +925,7 @@ function renderArtists() {
         );
 
     } else if (sort === "popularity") {
+
         filteredArtists.sort(
             (a, b) =>
                 Number(b.popularity || 0) -
@@ -622,120 +933,154 @@ function renderArtists() {
         );
 
     } else {
-        filteredArtists.sort((a, b) => {
 
-            const nameA =
-                a.name ||
-                a.artist_name ||
-                "";
+        filteredArtists.sort(
+            (a, b) => {
 
-            const nameB =
-                b.name ||
-                b.artist_name ||
-                "";
+                const nameA =
+                    a.name ||
+                    a.artist_name ||
+                    "";
 
-            return nameA.localeCompare(
-                nameB,
-                "fr-FR",
-                { sensitivity: "base" }
-            );
-        });
+                const nameB =
+                    b.name ||
+                    b.artist_name ||
+                    "";
+
+                return nameA.localeCompare(
+                    nameB,
+                    "fr-FR",
+                    {
+                        sensitivity: "base"
+                    }
+                );
+            }
+        );
     }
 
-    const artistCount = $("artist-count");
+
+    const artistCount =
+        $("artist-count");
 
     if (artistCount) {
         artistCount.textContent =
-            formatNumber(artists.length);
+            formatNumber(
+                artists.length
+            );
     }
 
+
     if (filteredArtists.length === 0) {
+
         container.innerHTML = `
             <tr>
-                <td colspan="6" class="muted">
+
+                <td
+                    colspan="6"
+                    class="muted"
+                >
                     Aucun artiste trouvé.
                 </td>
+
             </tr>
         `;
 
         return;
     }
 
-    container.innerHTML = filteredArtists
-        .map(artist => {
 
-            const name =
-                artist.name ||
-                artist.artist_name ||
-                "Artiste inconnu";
+    container.innerHTML =
+        filteredArtists
+            .map(artist => {
 
-            const spotifyURL =
-                artist.url ||
-                artist.external_urls?.spotify ||
-                "";
+                const name =
+                    artist.name ||
+                    artist.artist_name ||
+                    "Artiste inconnu";
 
-            const genres =
-                Array.isArray(artist.genres)
-                    ? artist.genres.join(", ")
-                    : "";
+                const spotifyURL =
+                    artist.url ||
+                    artist.external_urls?.spotify ||
+                    "";
 
-            return `
-                <tr>
+                const genres =
+                    Array.isArray(artist.genres)
+                        ? artist.genres.join(", ")
+                        : "";
 
-                    <td class="artist-name">
-                        ${
-                            spotifyURL
-                                ? `
-                                    <a
-                                        class="artist-link"
-                                        href="${escapeHTML(spotifyURL)}"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        ${escapeHTML(name)}
-                                    </a>
-                                `
-                                : escapeHTML(name)
-                        }
-                    </td>
 
-                    <td>
-                        ${formatNumber(artist.followers)}
-                    </td>
+                return `
+                    <tr>
 
-                    <td>
-                        ${formatNumber(artist.monthly_listeners)}
-                    </td>
+                        <td class="artist-name">
 
-                    <td>
-                        ${artist.popularity ?? "—"}
-                    </td>
+                            ${
+                                spotifyURL
+                                    ? `
+                                        <a
+                                            class="artist-link"
+                                            href="${escapeHTML(spotifyURL)}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            ${escapeHTML(name)}
+                                        </a>
+                                    `
+                                    : escapeHTML(name)
+                            }
 
-                    <td class="genres-cell">
-                        ${escapeHTML(genres || "—")}
-                    </td>
+                        </td>
 
-                    <td>
-                        ${
-                            spotifyURL
-                                ? `
-                                    <a
-                                        class="spotify-button"
-                                        href="${escapeHTML(spotifyURL)}"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                    >
-                                        Spotify
-                                    </a>
-                                `
-                                : "—"
-                        }
-                    </td>
 
-                </tr>
-            `;
-        })
-        .join("");
+                        <td>
+                            ${formatNumber(
+                                artist.followers
+                            )}
+                        </td>
+
+
+                        <td>
+                            ${formatNumber(
+                                artist.monthly_listeners
+                            )}
+                        </td>
+
+
+                        <td>
+                            ${artist.popularity ?? "—"}
+                        </td>
+
+
+                        <td class="genres-cell">
+                            ${escapeHTML(
+                                genres || "—"
+                            )}
+                        </td>
+
+
+                        <td>
+
+                            ${
+                                spotifyURL
+                                    ? `
+                                        <a
+                                            class="spotify-button"
+                                            href="${escapeHTML(spotifyURL)}"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            Spotify
+                                        </a>
+                                    `
+                                    : "—"
+                            }
+
+                        </td>
+
+                    </tr>
+                `;
+            })
+            .join("");
 }
 
 
@@ -744,53 +1089,85 @@ function renderArtists() {
    ========================================================= */
 
 function setupNavigation() {
+
     const buttons =
-        document.querySelectorAll(".nav-button");
+        document.querySelectorAll(
+            ".nav-button"
+        );
 
     const pages =
-        document.querySelectorAll(".page");
+        document.querySelectorAll(
+            ".page"
+        );
+
 
     buttons.forEach(button => {
 
-        button.addEventListener("click", () => {
+        button.addEventListener(
+            "click",
+            () => {
 
-            const target = button.dataset.page;
+                const target =
+                    button.dataset.page;
 
-            if (!target) return;
+                if (!target) return;
 
-            buttons.forEach(item =>
-                item.classList.remove("active")
-            );
 
-            pages.forEach(page =>
-                page.classList.remove("active")
-            );
+                buttons.forEach(item =>
+                    item.classList.remove(
+                        "active"
+                    )
+                );
 
-            button.classList.add("active");
 
-            const targetPage =
-                $(`page-${target}`);
+                pages.forEach(page =>
+                    page.classList.remove(
+                        "active"
+                    )
+                );
 
-            if (targetPage) {
-                targetPage.classList.add("active");
+
+                button.classList.add(
+                    "active"
+                );
+
+
+                const targetPage =
+                    $(`page-${target}`);
+
+
+                if (targetPage) {
+                    targetPage.classList.add(
+                        "active"
+                    );
+                }
+
+
+                if (
+                    target ===
+                    "all-releases"
+                ) {
+                    renderAllReleases();
+                }
+
+
+                if (
+                    target ===
+                    "releases"
+                ) {
+                    renderReleases();
+                }
+
+
+                if (
+                    target ===
+                    "artists"
+                ) {
+                    renderArtists();
+                }
+
             }
-
-            /*
-             * On recharge les sorties lorsque
-             * l'utilisateur ouvre l'onglet.
-             */
-            if (target === "all-releases") {
-                renderAllReleases();
-            }
-
-            if (target === "releases") {
-                renderReleases();
-            }
-
-            if (target === "artists") {
-                renderArtists();
-            }
-        });
+        );
     });
 }
 
@@ -803,47 +1180,115 @@ async function initialize() {
 
     displayCurrentDate();
 
+
+    /*
+     * On charge les sorties indépendamment
+     * des artistes.
+     */
+
     try {
 
-        const [
-            artistsData,
-            releasesData
-        ] = await Promise.all([
-            loadJSON(ARTISTS_FILE),
-            loadJSON(RELEASES_FILE)
-        ]);
-
-        artists =
-            parseArtists(artistsData);
+        const releasesData =
+            await loadJSON(
+                RELEASES_FILE
+            );
 
         releases =
-            parseReleases(releasesData);
-
-        renderArtists();
+            parseReleases(
+                releasesData
+            );
 
         renderReleases();
-
         renderAllReleases();
 
     } catch (error) {
 
+        console.error(
+            "Erreur sorties.json :",
+            error
+        );
+
+
+        const message = `
+            <div class="empty">
+
+                <strong>
+                    Impossible de charger les sorties
+                </strong>
+
+                <p>
+                    ${escapeHTML(
+                        error.message
+                    )}
+                </p>
+
+            </div>
+        `;
+
+
         const releaseList =
             $("release-list");
 
+        const allReleaseList =
+            $("all-release-list");
+
+
         if (releaseList) {
+            releaseList.innerHTML =
+                message;
+        }
 
-            releaseList.innerHTML = `
-                <div class="empty">
 
-                    <strong>
-                        Erreur de chargement
-                    </strong>
+        if (allReleaseList) {
+            allReleaseList.innerHTML =
+                message;
+        }
+    }
 
-                    <p>
-                        ${escapeHTML(error.message)}
-                    </p>
 
-                </div>
+    /*
+     * Les artistes sont chargés séparément.
+     */
+
+    try {
+
+        const artistsData =
+            await loadJSON(
+                ARTISTS_FILE
+            );
+
+        artists =
+            parseArtists(
+                artistsData
+            );
+
+        renderArtists();
+
+    } catch (error) {
+
+        console.error(
+            "Erreur artistes.json :",
+            error
+        );
+
+
+        const artistTable =
+            $("artist-table");
+
+
+        if (artistTable) {
+
+            artistTable.innerHTML = `
+                <tr>
+
+                    <td
+                        colspan="6"
+                        class="muted"
+                    >
+                        Impossible de charger les artistes.
+                    </td>
+
+                </tr>
             `;
         }
     }
@@ -862,6 +1307,7 @@ document.addEventListener(
             $("artist-search");
 
         if (artistSearch) {
+
             artistSearch.addEventListener(
                 "input",
                 renderArtists
@@ -873,6 +1319,7 @@ document.addEventListener(
             $("artist-sort");
 
         if (artistSort) {
+
             artistSort.addEventListener(
                 "change",
                 renderArtists
@@ -884,6 +1331,7 @@ document.addEventListener(
             $("release-search");
 
         if (releaseSearch) {
+
             releaseSearch.addEventListener(
                 "input",
                 renderReleases
@@ -895,6 +1343,7 @@ document.addEventListener(
             $("all-release-search");
 
         if (allReleaseSearch) {
+
             allReleaseSearch.addEventListener(
                 "input",
                 renderAllReleases
@@ -906,6 +1355,7 @@ document.addEventListener(
             $("all-release-sort");
 
         if (allReleaseSort) {
+
             allReleaseSort.addEventListener(
                 "change",
                 renderAllReleases
