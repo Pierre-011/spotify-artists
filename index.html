@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
 <header class="header">
     <div class="header-content">
         <div>
@@ -14,6 +15,7 @@
             <h1>Artists Dashboard</h1>
             <p>Artistes suivis et nouvelles sorties</p>
         </div>
+
         <div class="actions">
             <div class="date-box">
                 <span>Aujourd'hui</span>
@@ -24,12 +26,22 @@
 </header>
 
 <nav class="navigation">
-    <button class="nav-button active" data-page="releases">🎵 Sorties du jour</button>
-    <button class="nav-button" data-page="artists">👤 Artistes</button>
-    <button class="nav-button" data-page="genres">🎧 Genres</button>
+    <button class="nav-button active" data-page="releases">
+        🎵 Sorties du jour
+    </button>
+
+    <button class="nav-button" data-page="artists">
+        👤 Artistes
+    </button>
+
+    <button class="nav-button" data-page="all-releases">
+        📅 Toutes les sorties
+    </button>
 </nav>
 
 <main>
+
+    <!-- SORTIES DU JOUR -->
     <section id="page-releases" class="page active">
         <div class="page-header">
             <div>
@@ -37,19 +49,28 @@
                 <h2 id="release-title">Nouvelles sorties</h2>
                 <p id="release-description">Chargement...</p>
             </div>
+
             <div class="counter">
                 <strong id="release-count">0</strong>
                 <span>sorties</span>
             </div>
         </div>
+
         <div class="search-container">
-            <input type="search" id="release-search" placeholder="Rechercher une musique ou un artiste...">
+            <input
+                type="search"
+                id="release-search"
+                placeholder="Rechercher une musique ou un artiste..."
+            >
         </div>
+
         <div id="release-list" class="release-grid">
             <div class="loading">Chargement des sorties...</div>
         </div>
     </section>
 
+
+    <!-- ARTISTES -->
     <section id="page-artists" class="page">
         <div class="page-header">
             <div>
@@ -57,19 +78,27 @@
                 <h2>Artistes</h2>
                 <p>Tous les artistes présents dans artistes.json</p>
             </div>
+
             <div class="counter">
                 <strong id="artist-count">0</strong>
                 <span>artistes</span>
             </div>
         </div>
+
         <div class="toolbar">
-            <input type="search" id="artist-search" placeholder="Rechercher un artiste...">
+            <input
+                type="search"
+                id="artist-search"
+                placeholder="Rechercher un artiste..."
+            >
+
             <select id="artist-sort">
                 <option value="name">Nom A → Z</option>
                 <option value="followers">Nombre d'abonnés</option>
                 <option value="popularity">Popularité</option>
             </select>
         </div>
+
         <div class="table-container">
             <table>
                 <thead>
@@ -82,21 +111,53 @@
                         <th>Spotify</th>
                     </tr>
                 </thead>
+
                 <tbody id="artist-table"></tbody>
             </table>
         </div>
     </section>
 
-    <section id="page-genres" class="page">
+
+    <!-- TOUTES LES SORTIES -->
+    <section id="page-all-releases" class="page">
+
         <div class="page-header">
             <div>
-                <span class="section-label">RÉPARTITION</span>
-                <h2>Genres musicaux</h2>
-                <p>Répartition des artistes suivis par genre.</p>
+                <span class="section-label">HISTORIQUE</span>
+                <h2>Toutes les sorties</h2>
+                <p>
+                    Retrouvez toutes les sorties des artistes suivis,
+                    classées de la plus récente à la plus ancienne.
+                </p>
+            </div>
+
+            <div class="counter">
+                <strong id="all-release-count">0</strong>
+                <span>sorties</span>
             </div>
         </div>
-        <div id="genre-list" class="genre-grid"></div>
+
+        <div class="toolbar">
+            <input
+                type="search"
+                id="all-release-search"
+                placeholder="Rechercher une sortie ou un artiste..."
+            >
+
+            <select id="all-release-sort">
+                <option value="newest">Plus récentes</option>
+                <option value="oldest">Plus anciennes</option>
+            </select>
+        </div>
+
+        <div id="all-release-list" class="release-grid">
+            <div class="loading">
+                Chargement des sorties...
+            </div>
+        </div>
+
     </section>
+
 </main>
 
 <footer>
@@ -105,5 +166,6 @@
 </footer>
 
 <script src="app.js"></script>
+
 </body>
 </html>
