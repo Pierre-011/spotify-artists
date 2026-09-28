@@ -945,7 +945,7 @@ def split_round_robin(
 
 
 def main() -> None:
-    today = date.today()
+    today = date(2026, 9, 25)  #today = date.today()
 
     log("=" * 70)
     log("[DÉMARRAGE] Mise à jour des sorties (mode multiprocessus)")
