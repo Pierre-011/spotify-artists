@@ -24,22 +24,24 @@ return String(value ?? "")
 }
 
 function formatNumber(value) {
-if (
-value === null ||
-value === undefined ||
-value === ""
-) {
-return "—";
-}
 
 ```
+if (
+    value === null ||
+    value === undefined ||
+    value === ""
+) {
+    return "—";
+}
+
 const number = Number(value);
 
 if (Number.isNaN(number)) {
     return escapeHTML(value);
 }
 
-return new Intl.NumberFormat("fr-FR").format(number);
+return new Intl.NumberFormat("fr-FR")
+    .format(number);
 ```
 
 }
@@ -66,7 +68,6 @@ for (const part of parts) {
     if (part.type !== "literal") {
         date[part.type] = part.value;
     }
-
 }
 
 return `${date.year}-${date.month}-${date.day}`;
@@ -126,7 +127,6 @@ const date =
         day,
         12,
         0,
-        0,
         0
     );
 
@@ -170,22 +170,6 @@ return parsedDate.toLocaleDateString(
 
 }
 
-function getDaysDifference(dateA, dateB) {
-
-```
-const oneDay =
-    24 * 60 * 60 * 1000;
-
-return Math.round(
-    Math.abs(
-        dateB.getTime() -
-        dateA.getTime()
-    ) / oneDay
-);
-```
-
-}
-
 function displayCurrentDate() {
 
 ```
@@ -196,6 +180,7 @@ const currentDate =
     $("current-date");
 
 if (currentDate) {
+
     currentDate.textContent =
         formatDate(today);
 }
@@ -319,6 +304,7 @@ if (
     data.name ||
     data.artist_name
 ) {
+
     return [data];
 }
 
@@ -1114,6 +1100,7 @@ container.innerHTML =
                     ? artist.genres.join(", ")
                     : "";
 
+
             return `
                 <tr>
 
@@ -1136,11 +1123,13 @@ container.innerHTML =
 
                     </td>
 
+
                     <td>
                         ${formatNumber(
                             artist.followers
                         )}
                     </td>
+
 
                     <td>
                         ${formatNumber(
@@ -1148,15 +1137,18 @@ container.innerHTML =
                         )}
                     </td>
 
+
                     <td>
                         ${artist.popularity ?? "—"}
                     </td>
+
 
                     <td class="genres-cell">
                         ${escapeHTML(
                             genres || "—"
                         )}
                     </td>
+
 
                     <td>
 
@@ -1218,21 +1210,37 @@ return (
 function getReleaseType(release) {
 
 ```
-const rawType =
+return String(
     release.release_type ||
     release.releaseType ||
-    "";
-
-return String(rawType)
+    ""
+)
     .trim()
     .toLocaleLowerCase("fr-FR");
 ```
 
 }
 
-function getMonthLabel(year, month) {
+function getMonthKey(date) {
 
 ```
+if (!date) return "";
+
+return `${date.getFullYear()}-${String(
+    date.getMonth() + 1
+).padStart(2, "0")}`;
+```
+
+}
+
+function getMonthLabel(key) {
+
+```
+const [
+    year,
+    month
+] = key.split("-");
+
 const date =
     new Date(
         Number(year),
@@ -1243,42 +1251,20 @@ const date =
         0
     );
 
-return date.toLocaleDateString(
-    "fr-FR",
-    {
-        month: "long",
-        year: "numeric"
-    }
-);
+const label =
+    date.toLocaleDateString(
+        "fr-FR",
+        {
+            month: "long",
+            year: "numeric"
+        }
+    );
+
+return label.charAt(0).toUpperCase() +
+    label.slice(1);
 ```
 
 }
-
-function getMonthKey(date) {
-
-```
-return date
-    ? `${date.getFullYear()}-${String(
-        date.getMonth() + 1
-    ).padStart(2, "0")}`
-    : "";
-```
-
-}
-
-function getYearKey(date) {
-
-```
-return date
-    ? String(date.getFullYear())
-    : "";
-```
-
-}
-
-/* =========================================================
-RENDU DES STATISTIQUES
-========================================================= */
 
 function renderStatistics() {
 
@@ -1320,6 +1306,10 @@ const summaryContainer =
     $("stats-summary");
 
 
+/* -----------------------------------------------------
+   AUCUNE DONNÉE
+   ----------------------------------------------------- */
+
 if (!releases.length) {
 
     if (totalElement) {
@@ -1343,21 +1333,43 @@ if (!releases.length) {
     }
 
     if (artistsContainer) {
-        artistsContainer.innerHTML =
-            `<div class="empty">Aucune donnée disponible.</div>`;
+
+        artistsContainer.innerHTML = `
+            <div class="empty">
+                Aucune donnée disponible.
+            </div>
+        `;
     }
 
     if (monthsContainer) {
-        monthsContainer.innerHTML =
-            `<div class="empty">Aucune donnée disponible.</div>`;
+
+        monthsContainer.innerHTML = `
+            <div class="empty">
+                Aucune donnée disponible.
+            </div>
+        `;
     }
 
     if (summaryContainer) {
+
         summaryContainer.textContent =
-            "Aucune sortie disponible pour calculer les statistiques.";
+            "Aucune sortie disponible.";
     }
 
     return;
+}
+
+
+/* -----------------------------------------------------
+   TOTAL
+   ----------------------------------------------------- */
+
+if (totalElement) {
+
+    totalElement.textContent =
+        formatNumber(
+            releases.length
+        );
 }
 
 
@@ -1367,23 +1379,21 @@ if (!releases.length) {
 
 const releasesWithDates =
     releases
-        .map(release => ({
-            release,
-            date: parseLocalDate(
-                getReleaseDate(release)
-            )
-        }))
-        .filter(item => item.date);
+        .map(release => {
 
+            const date =
+                parseLocalDate(
+                    getReleaseDate(release)
+                );
 
-/* -----------------------------------------------------
-   TOTAL
-   ----------------------------------------------------- */
-
-if (totalElement) {
-    totalElement.textContent =
-        formatNumber(releases.length);
-}
+            return {
+                release,
+                date
+            };
+        })
+        .filter(
+            item => item.date
+        );
 
 
 /* -----------------------------------------------------
@@ -1426,7 +1436,7 @@ if (artistsCountElement) {
 
 
 /* -----------------------------------------------------
-   PÉRIODES
+   7 / 30 / 365 JOURS
    ----------------------------------------------------- */
 
 const today =
@@ -1483,13 +1493,14 @@ if (threeHundredSixtyFiveDaysElement) {
 
 
 /* -----------------------------------------------------
-   TYPES
+   TYPES DE SORTIES
    ----------------------------------------------------- */
 
 let singles = 0;
 let albums = 0;
 let eps = 0;
 let other = 0;
+
 
 for (const release of releases) {
 
@@ -1563,28 +1574,20 @@ if (artistsContainer) {
             )
             .slice(0, 10);
 
+
     if (!topArtists.length) {
 
         artistsContainer.innerHTML =
-            `<div class="empty">Aucun artiste trouvé.</div>`;
+            `<div class="empty">
+                Aucun artiste trouvé.
+            </div>`;
 
     } else {
-
-        const maxCount =
-            topArtists[0].count;
 
         artistsContainer.innerHTML =
             topArtists
                 .map(
                     (artist, index) => {
-
-                        const percentage =
-                            maxCount > 0
-                                ? (
-                                    artist.count /
-                                    maxCount
-                                ) * 100
-                                : 0;
 
                         return `
                             <div class="artist-rank">
@@ -1609,15 +1612,6 @@ if (artistsContainer) {
 
                                 </div>
 
-                                <div class="artist-rank-bar">
-
-                                    <div
-                                        class="artist-rank-fill"
-                                        style="width:${percentage}%"
-                                    ></div>
-
-                                </div>
-
                             </div>
                         `;
                     }
@@ -1628,11 +1622,12 @@ if (artistsContainer) {
 
 
 /* -----------------------------------------------------
-   MOIS
+   ÉVOLUTION MENSUELLE
    ----------------------------------------------------- */
 
 const monthMap =
     new Map();
+
 
 for (const item of releasesWithDates) {
 
@@ -1659,37 +1654,37 @@ if (monthsContainer) {
                     a[0].localeCompare(b[0])
             );
 
+
     if (!months.length) {
 
         monthsContainer.innerHTML =
-            `<div class="empty">Aucune date disponible.</div>`;
+            `<div class="empty">
+                Aucune date disponible.
+            </div>`;
 
     } else {
 
-        const maxMonthCount =
+        const maxCount =
             Math.max(
                 ...months.map(
                     item => item[1]
                 )
             );
 
+
         monthsContainer.innerHTML =
             months
                 .map(
                     ([key, count]) => {
 
-                        const [
-                            year,
-                            month
-                        ] = key.split("-");
-
                         const percentage =
-                            maxMonthCount > 0
+                            maxCount > 0
                                 ? (
                                     count /
-                                    maxMonthCount
+                                    maxCount
                                 ) * 100
                                 : 0;
+
 
                         return `
                             <div class="monthly-stat-row">
@@ -1698,10 +1693,7 @@ if (monthsContainer) {
 
                                     <span>
                                         ${escapeHTML(
-                                            getMonthLabel(
-                                                year,
-                                                month
-                                            )
+                                            getMonthLabel(key)
                                         )}
                                     </span>
 
@@ -1712,6 +1704,7 @@ if (monthsContainer) {
                                     </strong>
 
                                 </div>
+
 
                                 <div class="monthly-bar">
 
@@ -1739,10 +1732,16 @@ if (summaryContainer) {
 
     if (!releasesWithDates.length) {
 
-        summaryContainer.textContent =
-            `Le fichier contient ${formatNumber(
-                releases.length
-            )} sortie(s), mais aucune date exploitable n'a été trouvée.`;
+        summaryContainer.innerHTML = `
+            <p>
+                Le fichier contient
+                <strong>${formatNumber(
+                    releases.length
+                )}</strong>
+                sortie(s), mais aucune date exploitable
+                n'a été trouvée.
+            </p>
+        `;
 
     } else {
 
@@ -1751,29 +1750,38 @@ if (summaryContainer) {
                 item => item.date
             );
 
+
         const oldestDate =
             new Date(
                 Math.min(
                     ...dates.map(
-                        date => date.getTime()
+                        date =>
+                            date.getTime()
                     )
                 )
             );
+
 
         const newestDate =
             new Date(
                 Math.max(
                     ...dates.map(
-                        date => date.getTime()
+                        date =>
+                            date.getTime()
                     )
                 )
             );
 
+
         const duration =
-            getDaysDifference(
-                oldestDate,
-                newestDate
+            Math.round(
+                (
+                    newestDate.getTime() -
+                    oldestDate.getTime()
+                ) /
+                (1000 * 60 * 60 * 24)
             );
+
 
         const topArtist =
             [...artistMap.values()]
@@ -1782,6 +1790,7 @@ if (summaryContainer) {
                         b.count - a.count
                 )[0];
 
+
         const monthEntries =
             [...monthMap.entries()]
                 .sort(
@@ -1789,54 +1798,65 @@ if (summaryContainer) {
                         b[1] - a[1]
                 );
 
-        let monthText =
-            "";
+
+        let monthText = "";
+
 
         if (monthEntries.length) {
 
-            const [
-                year,
-                month
-            ] = monthEntries[0][0].split("-");
-
             monthText =
-                ` Le mois le plus actif est ${getMonthLabel(
-                    year,
-                    month
-                )} avec ${formatNumber(
+                `Le mois avec le plus de sorties est
+                <strong>${escapeHTML(
+                    getMonthLabel(
+                        monthEntries[0][0]
+                    )
+                )}</strong>
+                avec
+                <strong>${formatNumber(
                     monthEntries[0][1]
-                )} sortie(s).`;
+                )}</strong>
+                sortie(s).`;
         }
 
+
         summaryContainer.innerHTML = `
+
             <p>
                 Le catalogue contient
                 <strong>${formatNumber(
                     releases.length
                 )}</strong>
-                sortie(s) répartie(s) entre
-                <strong>${escapeHTML(
-                    formatDate(
-                        oldestDate.toISOString().slice(0, 10)
-                    )
-                )}</strong>
-                et
-                <strong>${escapeHTML(
-                    formatDate(
-                        newestDate.toISOString().slice(0, 10)
-                    )
-                )}.
+                sortie(s).
             </p>
 
+
             <p>
-                Cela représente une période de
+                Les sorties couvrent la période du
+                <strong>${formatDate(
+                    oldestDate
+                        .toISOString()
+                        .slice(0, 10)
+                )}</strong>
+                au
+                <strong>${formatDate(
+                    newestDate
+                        .toISOString()
+                        .slice(0, 10)
+                )}</strong>,
+                soit
                 <strong>${formatNumber(
                     duration
                 )}</strong>
                 jour(s).
-                ${
-                    topArtist
-                        ? `L'artiste ayant le plus de sorties est
+            </p>
+
+
+            ${
+                topArtist
+                    ? `
+                        <p>
+                            L'artiste avec le plus de sorties
+                            est
                             <strong>${escapeHTML(
                                 topArtist.name
                             )}</strong>
@@ -1844,14 +1864,23 @@ if (summaryContainer) {
                             <strong>${formatNumber(
                                 topArtist.count
                             )}</strong>
-                            sortie(s).`
-                        : ""
-                }
-            </p>
+                            sortie(s).
+                        </p>
+                    `
+                    : ""
+            }
 
-            <p>
-                ${monthText}
-            </p>
+
+            ${
+                monthText
+                    ? `
+                        <p>
+                            ${monthText}
+                        </p>
+                    `
+                    : ""
+            }
+
         `;
     }
 }
@@ -1922,15 +1951,6 @@ buttons.forEach(button => {
 
             if (
                 target ===
-                "all-releases"
-            ) {
-
-                renderAllReleases();
-            }
-
-
-            if (
-                target ===
                 "releases"
             ) {
 
@@ -1944,6 +1964,15 @@ buttons.forEach(button => {
             ) {
 
                 renderArtists();
+            }
+
+
+            if (
+                target ===
+                "all-releases"
+            ) {
+
+                renderAllReleases();
             }
 
 
@@ -1972,9 +2001,9 @@ async function initialize() {
 displayCurrentDate();
 
 
-/*
- * Les sorties sont chargées en premier.
- */
+/* -----------------------------------------------------
+   SORTIES
+   ----------------------------------------------------- */
 
 try {
 
@@ -1982,6 +2011,7 @@ try {
         await loadJSON(
             RELEASES_FILE
         );
+
 
     releases =
         parseReleases(
@@ -2068,9 +2098,9 @@ try {
 }
 
 
-/*
- * Les artistes sont chargés séparément.
- */
+/* -----------------------------------------------------
+   ARTISTES
+   ----------------------------------------------------- */
 
 try {
 
@@ -2079,10 +2109,12 @@ try {
             ARTISTS_FILE
         );
 
+
     artists =
         parseArtists(
             artistsData
         );
+
 
     renderArtists();
 
