@@ -13,13 +13,15 @@ let statsCache = null;
 const $ = id => document.getElementById(id);
 
 /* Les entités sont écrites avec \u0026 pour ne pas être décodées au copier-coller */
+const AMP = String.fromCharCode(38);
+
 function escapeHTML(value) {
     return String(value ?? "")
-        .replaceAll("\u0026", "\u0026amp;")
-        .replaceAll("<", "\u0026lt;")
-        .replaceAll(">", "\u0026gt;")
-        .replaceAll('"', "\u0026quot;")
-        .replaceAll("'", "\u0026#39;");
+        .replaceAll(AMP, AMP + "amp;")
+        .replaceAll("<", AMP + "lt;")
+        .replaceAll(">", AMP + "gt;")
+        .replaceAll('"', AMP + "quot;")
+        .replaceAll("'", AMP + "#39;");
 }
 
 function formatNumber(value) {
