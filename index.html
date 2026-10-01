@@ -1,743 +1,177 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spotify Artists Dashboard</title>
-
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
-
+    <link rel="stylesheet" href="style.css">
 </head>
-
-
 <body>
 
-
 <header class="header">
-
     <div class="header-content">
-
         <div>
-
-            <div class="logo">
-                SPOTIFY TRACKER
-            </div>
-
-            <h1>
-                Artists Dashboard
-            </h1>
-
-            <p>
-                Artistes suivis et nouvelles sorties
-            </p>
-
+            <div class="logo">SPOTIFY TRACKER</div>
+            <h1>Artists Dashboard</h1>
+            <p>Artistes suivis et nouvelles sorties</p>
         </div>
-
-
         <div class="actions">
-
             <div class="date-box">
-
-                <span>
-                    Aujourd'hui
-                </span>
-
-                <strong id="current-date">
-                    --
-                </strong>
-
+                <span>Aujourd'hui</span>
+                <strong id="current-date">--</strong>
             </div>
-
         </div>
-
     </div>
-
 </header>
 
-
-
-<!-- =====================================================
-     NAVIGATION
-     ===================================================== -->
-
 <nav class="navigation">
-
-    <button
-        class="nav-button active"
-        data-page="releases"
-    >
-        🎵 Sorties du jour
-    </button>
-
-
-    <button
-        class="nav-button"
-        data-page="artists"
-    >
-        👤 Artistes
-    </button>
-
-
-    <button
-        class="nav-button"
-        data-page="all-releases"
-    >
-        📅 Toutes les sorties
-    </button>
-
-
-    <button
-        class="nav-button"
-        data-page="stats"
-    >
-        📊 Statistiques
-    </button>
-
+    <button class="nav-button active" data-page="releases">🎵 Sorties du jour</button>
+    <button class="nav-button" data-page="artists">👤 Artistes</button>
+    <button class="nav-button" data-page="all-releases">📅 Toutes les sorties</button>
+    <button class="nav-button" data-page="stats">📊 Statistiques</button>
 </nav>
-
-
 
 <main>
 
-
-    <!-- =================================================
-         SORTIES DU JOUR
-         ================================================= -->
-
-    <section
-        id="page-releases"
-        class="page active"
-    >
-
+    <!-- SORTIES DU JOUR -->
+    <section id="page-releases" class="page active">
         <div class="page-header">
-
             <div>
-
-                <span class="section-label">
-                    AUJOURD'HUI
-                </span>
-
-
-                <h2 id="release-title">
-                    Nouvelles sorties
-                </h2>
-
-
-                <p id="release-description">
-                    Chargement...
-                </p>
-
+                <span class="section-label">AUJOURD'HUI</span>
+                <h2 id="release-title">Nouvelles sorties</h2>
+                <p id="release-description">Chargement...</p>
             </div>
-
-
             <div class="counter">
-
-                <strong id="release-count">
-                    0
-                </strong>
-
-                <span>
-                    sorties
-                </span>
-
+                <strong id="release-count">0</strong>
+                <span>sorties</span>
             </div>
-
         </div>
-
-
-
-        <!-- RECHERCHE -->
-
         <div class="search-container">
-
-            <input
-                type="search"
-                id="release-search"
-                placeholder="Rechercher une musique ou un artiste..."
-            >
-
+            <input type="search" id="release-search" placeholder="Rechercher une musique ou un artiste...">
         </div>
-
-
-
-        <!-- LISTE DES SORTIES -->
-
-        <div
-            id="release-list"
-            class="release-grid"
-        >
-
-            <div class="loading">
-                Chargement des sorties...
-            </div>
-
+        <div id="release-list" class="release-grid">
+            <div class="loading">Chargement des sorties...</div>
         </div>
-
     </section>
 
-
-
-    <!-- =================================================
-         ARTISTES
-         ================================================= -->
-
-    <section
-        id="page-artists"
-        class="page"
-    >
-
+    <!-- ARTISTES -->
+    <section id="page-artists" class="page">
         <div class="page-header">
-
             <div>
-
-                <span class="section-label">
-                    BASE DE DONNÉES
-                </span>
-
-
-                <h2>
-                    Artistes
-                </h2>
-
-
-                <p>
-                    Tous les artistes présents dans artistes.json
-                </p>
-
+                <span class="section-label">BASE DE DONNÉES</span>
+                <h2>Artistes</h2>
+                <p>Tous les artistes présents dans artistes.json</p>
             </div>
-
-
             <div class="counter">
-
-                <strong id="artist-count">
-                    0
-                </strong>
-
-                <span>
-                    artistes
-                </span>
-
+                <strong id="artist-count">0</strong>
+                <span>artistes</span>
             </div>
-
         </div>
-
-
-
-        <!-- RECHERCHE + TRI -->
-
         <div class="toolbar">
-
-            <input
-                type="search"
-                id="artist-search"
-                placeholder="Rechercher un artiste..."
-            >
-
-
+            <input type="search" id="artist-search" placeholder="Rechercher un artiste...">
             <select id="artist-sort">
-
-                <option value="name">
-                    Nom A → Z
-                </option>
-
-
-                <option value="followers">
-                    Nombre d'abonnés
-                </option>
-
-
-                <option value="popularity">
-                    Popularité
-                </option>
-
+                <option value="name">Nom A → Z</option>
+                <option value="followers">Nombre d'abonnés</option>
+                <option value="popularity">Popularité</option>
             </select>
-
         </div>
-
-
-
-        <!-- TABLEAU DES ARTISTES -->
-
         <div class="table-container">
-
             <table>
-
                 <thead>
-
                     <tr>
-
-                        <th>
-                            Artiste
-                        </th>
-
-
-                        <th>
-                            Abonnés
-                        </th>
-
-
-                        <th>
-                            Auditeurs mensuels
-                        </th>
-
-
-                        <th>
-                            Popularité
-                        </th>
-
-
-                        <th>
-                            Genres
-                        </th>
-
-
-                        <th>
-                            Spotify
-                        </th>
-
+                        <th>Artiste</th>
+                        <th>Abonnés</th>
+                        <th>Auditeurs mensuels</th>
+                        <th>Popularité</th>
+                        <th>Genres</th>
+                        <th>Spotify</th>
                     </tr>
-
                 </thead>
-
-
                 <tbody id="artist-table"></tbody>
-
             </table>
-
         </div>
-
     </section>
 
-
-
-    <!-- =================================================
-         TOUTES LES SORTIES
-         ================================================= -->
-
-    <section
-        id="page-all-releases"
-        class="page"
-    >
-
-        <div class="page-header all-releases-header">
-
-            <div>
-
-                <span class="section-label">
-                    CATALOGUE
-                </span>
-
-
-                <h2>
-                    Toutes les sorties
-                </h2>
-
-
-                <p>
-                    Toutes les sorties des artistes suivis,
-                    classées par date.
-                </p>
-
-            </div>
-
-
-            <div class="counter">
-
-                <strong id="all-release-count">
-                    0
-                </strong>
-
-                <span>
-                    sorties
-                </span>
-
-            </div>
-
-        </div>
-
-
-
-        <!-- FILTRES -->
-
-        <div class="release-toolbar">
-
-
-            <div class="release-search">
-
-                <span>
-                    ⌕
-                </span>
-
-
-                <input
-                    type="search"
-                    id="all-release-search"
-                    placeholder="Rechercher une sortie ou un artiste..."
-                >
-
-            </div>
-
-
-
-            <select id="all-release-sort">
-
-                <option value="newest">
-                    Plus récentes
-                </option>
-
-
-                <option value="oldest">
-                    Plus anciennes
-                </option>
-
-            </select>
-
-        </div>
-
-
-
-        <!-- SORTIES REGROUPÉES PAR DATE -->
-
-        <div
-            id="all-release-list"
-            class="all-release-list"
-        >
-
-            <div class="loading">
-
-                Chargement des sorties...
-
-            </div>
-
-        </div>
-
-    </section>
-
-
-
-    <!-- =================================================
-         STATISTIQUES
-         ================================================= -->
-
-    <section
-        id="page-stats"
-        class="page"
-    >
-
-
-        <!-- EN-TÊTE -->
-
+    <!-- TOUTES LES SORTIES -->
+    <section id="page-all-releases" class="page">
         <div class="page-header">
-
             <div>
-
-                <span class="section-label">
-                    ANALYSE
-                </span>
-
-
-                <h2>
-                    Statistiques
-                </h2>
-
-
-                <p>
-                    Analyse des sorties présentes dans sorties.json.
-                </p>
-
+                <span class="section-label">CATALOGUE</span>
+                <h2>Toutes les sorties</h2>
+                <p>Toutes les sorties des artistes suivis, classées par date.</p>
             </div>
-
+            <div class="counter">
+                <strong id="all-release-count">0</strong>
+                <span>sorties</span>
+            </div>
         </div>
+        <div class="release-toolbar">
+            <div class="release-search">
+                <span>⌕</span>
+                <input type="search" id="all-release-search" placeholder="Rechercher une sortie ou un artiste...">
+            </div>
+            <select id="all-release-sort">
+                <option value="newest">Plus récentes</option>
+                <option value="oldest">Plus anciennes</option>
+            </select>
+        </div>
+        <div id="all-release-list" class="all-release-list">
+            <div class="loading">Chargement des sorties...</div>
+        </div>
+    </section>
 
-
-
-        <!-- =================================================
-             CARTES PRINCIPALES
-             ================================================= -->
+    <!-- STATISTIQUES -->
+    <section id="page-stats" class="page">
+        <div class="page-header">
+            <div>
+                <span class="section-label">ANALYSE</span>
+                <h2>Statistiques</h2>
+                <p>Analyse des sorties présentes dans sorties.json.</p>
+            </div>
+        </div>
 
         <div class="stats-grid">
-
-
-            <!-- TOTAL -->
-
-            <div class="stat-card">
-
-                <span class="stat-label">
-                    TOTAL DES SORTIES
-                </span>
-
-
-                <strong id="stats-total">
-                    0
-                </strong>
-
-            </div>
-
-
-
-            <!-- 7 JOURS -->
-
-            <div class="stat-card">
-
-                <span class="stat-label">
-                    7 DERNIERS JOURS
-                </span>
-
-
-                <strong id="stats-7-days">
-                    0
-                </strong>
-
-            </div>
-
-
-
-            <!-- 30 JOURS -->
-
-            <div class="stat-card">
-
-                <span class="stat-label">
-                    30 DERNIERS JOURS
-                </span>
-
-
-                <strong id="stats-30-days">
-                    0
-                </strong>
-
-            </div>
-
-
-
-            <!-- 365 JOURS -->
-
-            <div class="stat-card">
-
-                <span class="stat-label">
-                    365 DERNIERS JOURS
-                </span>
-
-
-                <strong id="stats-365-days">
-                    0
-                </strong>
-
-            </div>
-
-
-
-            <!-- ARTISTES ACTIFS -->
-
-            <div class="stat-card">
-
-                <span class="stat-label">
-                    ARTISTES ACTIFS
-                </span>
-
-
-                <strong id="stats-artists-count">
-                    0
-                </strong>
-
-            </div>
-
+            <div class="stat-card"><span class="stat-label">TOTAL DES SORTIES</span><strong id="stats-total">0</strong></div>
+            <div class="stat-card"><span class="stat-label">7 DERNIERS JOURS</span><strong id="stats-7-days">0</strong></div>
+            <div class="stat-card"><span class="stat-label">30 DERNIERS JOURS</span><strong id="stats-30-days">0</strong></div>
+            <div class="stat-card"><span class="stat-label">365 DERNIERS JOURS</span><strong id="stats-365-days">0</strong></div>
+            <div class="stat-card"><span class="stat-label">ARTISTES ACTIFS</span><strong id="stats-artists-count">0</strong></div>
         </div>
-
-
-
-        <!-- =================================================
-             TYPES DE SORTIES + TOP ARTISTES
-             ================================================= -->
 
         <div class="stats-columns">
-
-
-            <!-- TYPES -->
-
             <div class="stats-panel">
-
-                <h3>
-                    Types de sorties
-                </h3>
-
-
+                <h3>Types de sorties</h3>
                 <div id="stats-types">
-
-
-                    <div class="stats-row">
-
-                        <span>
-                            Singles
-                        </span>
-
-
-                        <strong id="stats-singles">
-                            0
-                        </strong>
-
-                    </div>
-
-
-
-                    <div class="stats-row">
-
-                        <span>
-                            Albums
-                        </span>
-
-
-                        <strong id="stats-albums">
-                            0
-                        </strong>
-
-                    </div>
-
-
-
-                    <div class="stats-row">
-
-                        <span>
-                            EP
-                        </span>
-
-
-                        <strong id="stats-eps">
-                            0
-                        </strong>
-
-                    </div>
-
-
-
-                    <div class="stats-row">
-
-                        <span>
-                            Autres
-                        </span>
-
-
-                        <strong id="stats-other">
-                            0
-                        </strong>
-
-                    </div>
-
+                    <div class="stats-row"><span>Singles</span><strong id="stats-singles">0</strong></div>
+                    <div class="stats-row"><span>Albums</span><strong id="stats-albums">0</strong></div>
+                    <div class="stats-row"><span>EP</span><strong id="stats-eps">0</strong></div>
+                    <div class="stats-row"><span>Autres</span><strong id="stats-other">0</strong></div>
                 </div>
-
             </div>
-
-
-
-            <!-- TOP ARTISTES -->
-
             <div class="stats-panel">
-
-                <h3>
-                    Artistes avec le plus de sorties
-                </h3>
-
-
-                <div id="stats-artists">
-
-                    <div class="loading">
-                        Chargement...
-                    </div>
-
-                </div>
-
+                <h3>Artistes avec le plus de sorties</h3>
+                <div id="stats-artists"><div class="loading">Chargement...</div></div>
             </div>
-
         </div>
-
-
-
-        <!-- =================================================
-             ÉVOLUTION MENSUELLE
-             ================================================= -->
 
         <div class="stats-panel">
-
-            <h3>
-                Évolution des sorties
-            </h3>
-
-
-            <div
-                id="stats-months"
-                class="monthly-stats"
-            >
-
-                <div class="loading">
-                    Chargement...
-                </div>
-
-            </div>
-
+            <h3>Évolution des sorties</h3>
+            <div id="stats-months" class="monthly-stats"><div class="loading">Chargement...</div></div>
         </div>
-
-
-
-        <!-- =================================================
-             RÉSUMÉ
-             ================================================= -->
 
         <div class="stats-panel">
-
-            <h3>
-                Résumé
-            </h3>
-
-
-            <div
-                id="stats-summary"
-                class="stats-summary"
-            >
-
-                Chargement...
-
-            </div>
-
+            <h3>Résumé</h3>
+            <div id="stats-summary" class="stats-summary">Chargement...</div>
         </div>
-
-
     </section>
-
 
 </main>
 
-
-
-<!-- =====================================================
-     FOOTER
-     ===================================================== -->
-
 <footer>
-
-    <div>
-        Spotify Artists Dashboard
-    </div>
-
-
-    <div>
-        Données : artistes.json / sorties.json
-    </div>
-
+    <div>Spotify Artists Dashboard</div>
+    <div>Données : artistes.json / sorties.json</div>
 </footer>
 
-
-
 <script src="app.js"></script>
-
 </body>
-
 </html>
