@@ -48,17 +48,25 @@ body {
 }
 
 
+body.modal-open {
+    overflow: hidden;
+}
+
+
 button,
 input {
     font-family: inherit;
 }
 
 
-a:focus-visible,
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+.release-card:focus-visible {
 
-    outline: 2px solid var(--spotify);
+    outline:
+        2px solid
+        var(--spotify);
+
     outline-offset: 2px;
 
 }
@@ -130,23 +138,6 @@ h1 {
 }
 
 
-/* =========================================================
-   ACTIONS
-   ========================================================= */
-
-.actions {
-
-    display: flex;
-
-    flex-direction: column;
-
-    align-items: flex-end;
-
-    gap: 12px;
-
-}
-
-
 .date-box {
 
     text-align: right;
@@ -176,75 +167,112 @@ h1 {
 }
 
 
-.refresh-button {
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+
+.navigation {
+
+    max-width: 1400px;
+
+    margin: 0 auto;
 
     padding:
-        9px
-        15px;
+        0
+        30px;
 
-    border:
+    display: flex;
+
+    gap: 8px;
+
+    overflow-x: auto;
+
+    border-bottom:
         1px solid
         var(--border);
 
-    border-radius: 30px;
+}
 
-    background: var(--surface);
 
-    color: var(--text);
+.nav-tab {
+
+    position: relative;
+
+    padding:
+        14px
+        18px;
+
+    border: none;
+
+    background: transparent;
+
+    color: var(--text-secondary);
 
     cursor: pointer;
 
-    font-size: 12px;
+    font-size: 13px;
 
     font-weight: 700;
 
+    white-space: nowrap;
+
     transition:
-        background .2s ease,
-        border-color .2s ease,
-        transform .2s ease;
+        color .2s ease,
+        background .2s ease;
 
 }
 
 
-.refresh-button:hover {
+.nav-tab:hover {
 
-    background: var(--surface-light);
+    color: var(--text);
 
-    border-color: var(--spotify);
-
-    transform: translateY(-1px);
-
-}
-
-
-.refresh-button:disabled {
-
-    opacity: .6;
-
-    cursor: wait;
+    background:
+        rgba(
+            255,
+            255,
+            255,
+            .03
+        );
 
 }
 
 
-.refresh-button.is-loading {
+.nav-tab.active {
 
-    animation:
-        pulse 1s infinite;
+    color: var(--spotify);
 
 }
 
 
-@keyframes pulse {
+.nav-tab.active::after {
 
-    50% {
-        opacity: .5;
-    }
+    content: "";
+
+    position: absolute;
+
+    left: 12px;
+
+    right: 12px;
+
+    bottom: -1px;
+
+    height: 3px;
+
+    border-radius:
+        3px
+        3px
+        0
+        0;
+
+    background:
+        var(--spotify);
 
 }
 
 
 /* =========================================================
-   MAIN
+   PAGES
    ========================================================= */
 
 main {
@@ -262,13 +290,18 @@ main {
 
 
 .page {
-    display: block;
+
+    display: none;
+
 }
 
 
-/* =========================================================
-   PAGE HEADER
-   ========================================================= */
+.page.active {
+
+    display: block;
+
+}
+
 
 .page-header {
 
@@ -408,13 +441,14 @@ input::placeholder {
 
 input:focus {
 
-    border-color: var(--spotify);
+    border-color:
+        var(--spotify);
 
 }
 
 
 /* =========================================================
-   GRILLE
+   SORTIES
    ========================================================= */
 
 .release-grid {
@@ -432,10 +466,6 @@ input:focus {
 }
 
 
-/* =========================================================
-   CARTE
-   ========================================================= */
-
 .release-card {
 
     overflow: hidden;
@@ -448,6 +478,8 @@ input:focus {
 
     border-radius: 15px;
 
+    cursor: pointer;
+
     transition:
         transform .2s ease,
         border-color .2s ease,
@@ -459,28 +491,24 @@ input:focus {
 .release-card:hover {
 
     transform:
-        translateY(-3px);
+        translateY(-4px);
 
     border-color:
-        #3b444e;
+        var(--spotify);
 
     box-shadow:
         0
-        12px
-        30px
+        14px
+        35px
         rgba(
             0,
             0,
             0,
-            .25
+            .30
         );
 
 }
 
-
-/* =========================================================
-   POCHETTE
-   ========================================================= */
 
 .release-cover {
 
@@ -488,9 +516,9 @@ input:focus {
 
     aspect-ratio: 1 / 1;
 
-    object-fit: cover;
-
     display: block;
+
+    object-fit: cover;
 
     background:
         var(--surface-light);
@@ -513,16 +541,13 @@ input:focus {
             var(--surface-light) 55%
         );
 
-    color: var(--spotify);
+    color:
+        var(--spotify);
 
     font-size: 60px;
 
 }
 
-
-/* =========================================================
-   INFORMATIONS
-   ========================================================= */
 
 .release-information {
 
@@ -533,7 +558,8 @@ input:focus {
 
 .release-type {
 
-    color: var(--spotify);
+    color:
+        var(--spotify);
 
     font-size: 10px;
 
@@ -567,7 +593,8 @@ input:focus {
 
     margin-top: 4px;
 
-    color: var(--text-secondary);
+    color:
+        var(--text-secondary);
 
     overflow: hidden;
 
@@ -582,7 +609,8 @@ input:focus {
 
     margin-top: 12px;
 
-    color: var(--text-secondary);
+    color:
+        var(--text-secondary);
 
     font-size: 12px;
 
@@ -590,51 +618,549 @@ input:focus {
 
 
 /* =========================================================
-   BOUTON SPOTIFY
+   ARTISTES
    ========================================================= */
 
-.spotify-button {
+.artist-grid {
 
-    display: inline-block;
+    display: grid;
 
-    margin-top: 15px;
+    grid-template-columns:
+        repeat(
+            auto-fill,
+            minmax(180px, 1fr)
+        );
+
+    gap: 18px;
+
+}
+
+
+.artist-card {
+
+    padding: 18px;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius: 15px;
+
+    text-align: center;
+
+    transition:
+        transform .2s ease,
+        border-color .2s ease;
+
+}
+
+
+.artist-card:hover {
+
+    transform:
+        translateY(-3px);
+
+    border-color:
+        var(--spotify);
+
+}
+
+
+.artist-image {
+
+    width: 120px;
+
+    height: 120px;
+
+    margin:
+        0 auto
+        15px;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+
+    display: block;
+
+}
+
+
+.artist-image-empty {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background:
+        var(--surface-light);
+
+    color:
+        var(--spotify);
+
+    font-size: 40px;
+
+}
+
+
+.artist-name {
+
+    font-size: 15px;
+
+    font-weight: 800;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+}
+
+
+/* =========================================================
+   STATISTIQUES
+   ========================================================= */
+
+.stats-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(200px, 1fr)
+        );
+
+    gap: 18px;
+
+}
+
+
+.stat-card {
+
+    padding: 25px;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius: 15px;
+
+}
+
+
+.stat-card span {
+
+    display: block;
+
+    color:
+        var(--text-secondary);
+
+    font-size: 12px;
+
+}
+
+
+.stat-card strong {
+
+    display: block;
+
+    margin-top: 8px;
+
+    color:
+        var(--spotify);
+
+    font-size: 34px;
+
+}
+
+
+.stats-section {
+
+    margin-top: 35px;
+
+}
+
+
+.stats-section h3 {
+
+    margin-bottom: 15px;
+
+}
+
+
+.artist-stats {
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius: 15px;
+
+    overflow: hidden;
+
+}
+
+
+.artist-stat-row {
+
+    display: flex;
+
+    justify-content: space-between;
+
+    align-items: center;
 
     padding:
-        9px
-        14px;
+        15px
+        18px;
+
+    border-bottom:
+        1px solid
+        var(--border);
+
+}
+
+
+.artist-stat-row:last-child {
+
+    border-bottom: none;
+
+}
+
+
+.artist-stat-row span {
+
+    color:
+        var(--text-secondary);
+
+}
+
+
+.artist-stat-row strong {
+
+    color:
+        var(--spotify);
+
+}
+
+
+/* =========================================================
+   POPUP
+   ========================================================= */
+
+.modal {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 1000;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 20px;
+
+    opacity: 0;
+
+    visibility: hidden;
+
+    pointer-events: none;
+
+    transition:
+        opacity .25s ease,
+        visibility .25s ease;
+
+}
+
+
+.modal.open {
+
+    opacity: 1;
+
+    visibility: visible;
+
+    pointer-events: auto;
+
+}
+
+
+.modal-overlay {
+
+    position: absolute;
+
+    inset: 0;
+
+    background:
+        rgba(
+            0,
+            0,
+            0,
+            .78
+        );
+
+    backdrop-filter:
+        blur(8px);
+
+}
+
+
+.modal-content {
+
+    position: relative;
+
+    z-index: 2;
+
+    width:
+        min(
+            900px,
+            100%
+        );
+
+    max-height: 90vh;
+
+    overflow: auto;
+
+    display: grid;
+
+    grid-template-columns:
+        minmax(280px, 45%)
+        1fr;
+
+    background:
+        var(--surface);
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius: 20px;
+
+    box-shadow:
+        0
+        30px
+        80px
+        rgba(
+            0,
+            0,
+            0,
+            .55
+        );
+
+    transform:
+        translateY(20px)
+        scale(.97);
+
+    transition:
+        transform .25s ease;
+
+}
+
+
+.modal.open .modal-content {
+
+    transform:
+        translateY(0)
+        scale(1);
+
+}
+
+
+.modal-close {
+
+    position: absolute;
+
+    top: 14px;
+
+    right: 14px;
+
+    z-index: 5;
+
+    width: 40px;
+
+    height: 40px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border: none;
+
+    border-radius: 50%;
+
+    background:
+        rgba(
+            0,
+            0,
+            0,
+            .65
+        );
+
+    color: white;
+
+    cursor: pointer;
+
+    font-size: 28px;
+
+    line-height: 1;
+
+}
+
+
+.modal-close:hover {
+
+    background:
+        var(--spotify);
+
+    color: #071108;
+
+}
+
+
+.modal-image-container {
+
+    min-height: 350px;
+
+    background:
+        var(--surface-light);
+
+}
+
+
+.modal-image {
+
+    width: 100%;
+
+    height: 100%;
+
+    min-height: 350px;
+
+    display: block;
+
+    object-fit: cover;
+
+}
+
+
+.modal-information {
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    padding: 45px;
+
+}
+
+
+.modal-type {
+
+    color:
+        var(--spotify);
+
+    font-size: 11px;
+
+    font-weight: 800;
+
+    letter-spacing: 2px;
+
+}
+
+
+.modal-information h3 {
+
+    margin:
+        12px
+        0
+        8px;
+
+    font-size: 34px;
+
+    line-height: 1.15;
+
+}
+
+
+.modal-artist {
+
+    color:
+        var(--text-secondary);
+
+    font-size: 20px;
+
+}
+
+
+.modal-date {
+
+    margin-top: 25px;
+
+    color:
+        var(--text-secondary);
+
+    font-size: 13px;
+
+}
+
+
+.modal-spotify-button {
+
+    align-self: flex-start;
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    margin-top: 30px;
+
+    padding:
+        12px
+        20px;
 
     border-radius: 30px;
 
-    background: var(--spotify);
+    background:
+        var(--spotify);
 
     color: #071108;
 
     text-decoration: none;
 
-    font-size: 12px;
+    font-size: 13px;
 
     font-weight: 800;
-
-    transition:
-        background .2s ease,
-        transform .2s ease;
 
 }
 
 
-.spotify-button:hover {
+.modal-spotify-button:hover {
 
     background:
         var(--spotify-hover);
-
-    transform:
-        translateY(-1px);
 
 }
 
 
 /* =========================================================
-   CHARGEMENT / VIDE / ERREUR
+   ÉTATS
    ========================================================= */
 
 .loading,
@@ -654,15 +1180,8 @@ input:focus {
 
     text-align: center;
 
-    color: var(--text-secondary);
-
-}
-
-
-.loading {
-
-    animation:
-        pulse 1.5s infinite;
+    color:
+        var(--text-secondary);
 
 }
 
@@ -671,24 +1190,18 @@ input:focus {
 
     margin-bottom: 10px;
 
-    color: var(--spotify);
+    color:
+        var(--spotify);
 
     font-size: 35px;
 
 }
 
 
-.loading strong,
 .empty strong {
 
-    color: var(--text);
-
-}
-
-
-.empty p {
-
-    margin-bottom: 0;
+    color:
+        var(--text);
 
 }
 
@@ -716,7 +1229,8 @@ footer {
 
     justify-content: space-between;
 
-    color: var(--text-secondary);
+    color:
+        var(--text-secondary);
 
     font-size: 12px;
 
@@ -729,20 +1243,41 @@ footer {
 
 @media (max-width: 900px) {
 
-    .release-grid {
+    h1 {
+        font-size: 42px;
+    }
 
-        grid-template-columns:
-            repeat(
-                auto-fill,
-                minmax(230px, 1fr)
-            );
+
+    .modal-content {
+
+        grid-template-columns: 1fr;
+
+        max-width: 600px;
 
     }
 
 
-    h1 {
+    .modal-image-container {
 
-        font-size: 42px;
+        max-height: 55vh;
+
+        min-height: 0;
+
+    }
+
+
+    .modal-image {
+
+        min-height: 0;
+
+        max-height: 55vh;
+
+    }
+
+
+    .modal-information {
+
+        padding: 30px;
 
     }
 
@@ -782,13 +1317,6 @@ footer {
     }
 
 
-    .actions {
-
-        align-items: flex-start;
-
-    }
-
-
     h1 {
 
         font-size: 36px;
@@ -799,6 +1327,24 @@ footer {
     h2 {
 
         font-size: 28px;
+
+    }
+
+
+    .navigation {
+
+        padding:
+            0
+            10px;
+
+    }
+
+
+    .nav-tab {
+
+        padding:
+            13px
+            12px;
 
     }
 
@@ -816,6 +1362,17 @@ footer {
     .release-grid {
 
         grid-template-columns: 1fr;
+
+    }
+
+
+    .artist-grid {
+
+        grid-template-columns:
+            repeat(
+                2,
+                1fr
+            );
 
     }
 
@@ -844,39 +1401,61 @@ footer {
 
     }
 
-}
 
+    .modal {
 
-/* =========================================================
-   PETITS ÉCRANS
-   ========================================================= */
-
-@media (max-width: 430px) {
-
-    h1 {
-
-        font-size: 32px;
+        padding: 10px;
 
     }
 
 
-    h2 {
+    .modal-content {
 
-        font-size: 25px;
+        max-height: 95vh;
 
-    }
-
-
-    .release-information {
-
-        padding: 15px;
+        border-radius: 16px;
 
     }
 
 
-    .release-name {
+    .modal-image-container {
+
+        max-height: 45vh;
+
+    }
+
+
+    .modal-image {
+
+        max-height: 45vh;
+
+    }
+
+
+    .modal-information {
+
+        padding: 25px;
+
+    }
+
+
+    .modal-information h3 {
+
+        font-size: 26px;
+
+    }
+
+
+    .modal-artist {
 
         font-size: 17px;
+
+    }
+
+
+    .modal-spotify-button {
+
+        width: 100%;
 
     }
 
@@ -894,8 +1473,6 @@ footer {
     *::after {
 
         transition: none !important;
-
-        animation: none !important;
 
     }
 
