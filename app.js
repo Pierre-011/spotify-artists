@@ -2,13 +2,13 @@
 
 
 /* =========================================================
-   CONFIGURATION
+   SOURCES
    ========================================================= */
 
-const RELEASES_FILE =
+const RELEASES_URL =
     "https://pierre-011.github.io/spotify-artists/data/sorties.json";
 
-const ARTISTS_FILE =
+const ARTISTS_URL =
     "./data/artistes.json";
 
 
@@ -20,41 +20,22 @@ let artists = [];
    UTILITAIRES
    ========================================================= */
 
-const $ = id =>
-    document.getElementById(id);
+function $(id) {
+    return document.getElementById(id);
+}
 
 
 function escapeHTML(value) {
-
     return String(value ?? "")
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#39;");
+        .replaceAll("'", "&#039;");
 }
 
 
-function normalizeText(value) {
-
-    return String(value ?? "")
-        .toLocaleLowerCase("fr-FR")
-        .trim();
-}
-
-
-function formatNumber(value) {
-
-    return new Intl.NumberFormat("fr-FR")
-        .format(Number(value) || 0);
-}
-
-
-/* =========================================================
-   DATES
-   ========================================================= */
-
-function getTodayParis() {
+function getToday() {
 
     const parts =
         new Intl.DateTimeFormat(
@@ -68,18 +49,16 @@ function getTodayParis() {
         ).formatToParts(new Date());
 
 
-    const result = {};
+    const values = {};
 
-    for (const part of parts) {
-
+    parts.forEach(part => {
         if (part.type !== "literal") {
-            result[part.type] = part.value;
+            values[part.type] = part.value;
         }
+    });
 
-    }
 
-
-    return `${result.year}-${result.month}-${result.day}`;
+    return `${values.year}-${values.month}-${values.day}`;
 }
 
 
@@ -90,12 +69,12 @@ function normalizeDate(value) {
     }
 
 
-    const string =
+    const valueString =
         String(value).trim();
 
 
     const iso =
-        string.match(
+        valueString.match(
             /^(\d{4}-\d{2}-\d{2})/
         );
 
@@ -106,7 +85,7 @@ function normalizeDate(value) {
 
 
     const french =
-        string.match(
+        valueString.match(
             /^(\d{2})\/(\d{2})\/(\d{4})/
         );
 
@@ -124,12 +103,12 @@ function normalizeDate(value) {
 
 function formatDate(value) {
 
-    const normalized =
+    const date =
         normalizeDate(value);
 
 
-    if (!normalized) {
-        return "—";
+    if (!date) {
+        return "--";
     }
 
 
@@ -137,61 +116,137 @@ function formatDate(value) {
         year,
         month,
         day
-    ] = normalized.split("-");
+    ] = date.split("-");
 
 
     return `${day}/${month}/${year}`;
 }
 
 
-function formatReadableDate(value) {
+/* =========================================================
+   EXTRACTION DES INFORMATIONS
+   ========================================================= */
 
-    const normalized =
-        normalizeDate(value);
+function releaseTitle(item) {
+
+    return (
+        item.name ||
+        item.title ||
+        item.track_name ||
+        item.trackName ||
+        item.album_name ||
+        item.albumName ||
+        "Titre inconnu"
+    );
+}
 
 
-    if (!normalized) {
-        return "Date inconnue";
+function releaseArtist(item) {
+
+    if (item.artist_name) {
+        return item.artist_name;
     }
 
+    if (item.artistName) {
+        return item.artistName;
+    }
 
-    const [
-        year,
-        month,
-        day
-    ] = normalized.split("-");
+    if (typeof item.artist === "string") {
+        return item.artist;
+    }
 
-
-    const date =
-        new Date(
-            Number(year),
-            Number(month) - 1,
-            Number(day),
-            12
+    if (
+        Array.isArray(item.artists) &&
+        item.artists.length
+    ) {
+        return (
+            item.artists[0].name ||
+            item.artists[0]
         );
+    }
+
+    return "Artiste inconnu";
+}
 
 
-    return date.toLocaleDateString(
-        "fr-FR",
-        {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric"
-        }
+function releaseDate(item) {
+
+    return normalizeDate(
+        item.release_date ||
+        item.releaseDate ||
+        item.date ||
+        ""
+    );
+}
+
+
+function releaseImage(item) {
+
+    if (item.album_image) {
+        return item.album_image;
+    }
+
+    if (item.albumImage) {
+        return item.albumImage;
+    }
+
+    if (item.image) {
+        return item.image;
+    }
+
+    if (
+        Array.isArray(item.images) &&
+        item.images.length
+    ) {
+        return item.images[0].url || item.images[0];
+    }
+
+    if (
+        item.album &&
+        Array.isArray(item.album.images) &&
+        item.album.images.length
+    ) {
+        return item.album.images[0].url;
+    }
+
+    return "";
+}
+
+
+function releaseURL(item) {
+
+    return (
+        item.spotify_url ||
+        item.spotifyUrl ||
+        item.url ||
+        item.external_url ||
+        item.external_urls?.spotify ||
+        ""
+    );
+}
+
+
+function releaseType(item) {
+
+    return (
+        item.release_type ||
+        item.releaseType ||
+        item.album_type ||
+        item.type ||
+        "release"
     );
 }
 
 
 /* =========================================================
-   CHARGEMENT DES SORTIES
+   CHARGEMENT JSON
    ========================================================= */
 
-async function loadReleases() {
+async function loadJSON(url) {
 
     const response =
         await fetch(
-            `${RELEASES_FILE}?t=${Date.now()}`,
+            `${url}?t=${Date.now()}`,
             {
                 cache: "no-store"
             }
@@ -201,168 +256,53 @@ async function loadReleases() {
     if (!response.ok) {
 
         throw new Error(
-            `Erreur HTTP ${response.status}`
+            `Impossible de charger ${url}`
         );
 
     }
 
 
-    const data =
-        await response.json();
+    return response.json();
+}
 
+
+function extractReleases(data) {
 
     if (Array.isArray(data)) {
-        return data.filter(Boolean);
+        return data;
     }
-
 
     if (Array.isArray(data.tracks)) {
-        return data.tracks.filter(Boolean);
+        return data.tracks;
     }
-
 
     if (Array.isArray(data.releases)) {
-        return data.releases.filter(Boolean);
+        return data.releases;
     }
-
 
     if (Array.isArray(data.albums)) {
-        return data.albums.filter(Boolean);
+        return data.albums;
     }
-
 
     return [];
 }
 
 
-/* =========================================================
-   CHARGEMENT DES ARTISTES
-   ========================================================= */
+function extractArtists(data) {
 
-async function loadArtists() {
-
-    try {
-
-        const response =
-            await fetch(
-                ARTISTS_FILE,
-                {
-                    cache: "no-store"
-                }
-            );
-
-
-        if (!response.ok) {
-            return [];
-        }
-
-
-        const data =
-            await response.json();
-
-
-        if (Array.isArray(data)) {
-            return data.filter(Boolean);
-        }
-
-
-        if (Array.isArray(data.artists)) {
-            return data.artists.filter(Boolean);
-        }
-
-
-        return [];
-
-    } catch (error) {
-
-        console.warn(
-            "artistes.json indisponible :",
-            error
-        );
-
-        return [];
-
+    if (Array.isArray(data)) {
+        return data;
     }
-}
 
+    if (Array.isArray(data.artists)) {
+        return data.artists;
+    }
 
-/* =========================================================
-   INFORMATIONS SORTIES
-   ========================================================= */
+    if (Array.isArray(data.followed_artists)) {
+        return data.followed_artists;
+    }
 
-function getReleaseDate(release) {
-
-    return normalizeDate(
-        release?.release_date ??
-        release?.releaseDate ??
-        release?.date ??
-        ""
-    );
-}
-
-
-function getReleaseTitle(release) {
-
-    return (
-        release?.name ||
-        release?.track_name ||
-        release?.trackName ||
-        release?.album_name ||
-        release?.albumName ||
-        release?.title ||
-        "Titre inconnu"
-    );
-}
-
-
-function getReleaseArtist(release) {
-
-    return (
-        release?.artist_name ||
-        release?.artistName ||
-        release?.artist ||
-        release?.artists?.[0]?.name ||
-        "Artiste inconnu"
-    );
-}
-
-
-function getReleaseImage(release) {
-
-    return (
-        release?.album_image ||
-        release?.albumImage ||
-        release?.image ||
-        release?.images?.[0]?.url ||
-        release?.album?.images?.[0]?.url ||
-        ""
-    );
-}
-
-
-function getReleaseURL(release) {
-
-    return (
-        release?.url ||
-        release?.external_url ||
-        release?.external_urls?.spotify ||
-        release?.spotify_url ||
-        release?.spotifyUrl ||
-        ""
-    );
-}
-
-
-function getReleaseType(release) {
-
-    return String(
-        release?.release_type ||
-        release?.releaseType ||
-        release?.album_type ||
-        ""
-    )
-        .trim()
-        .toLowerCase();
+    return [];
 }
 
 
@@ -370,45 +310,41 @@ function getReleaseType(release) {
    NAVIGATION
    ========================================================= */
 
-function setupNavigation() {
+function setupTabs() {
 
     document
-        .querySelectorAll(".nav-tab")
-        .forEach(button => {
+        .querySelectorAll(".tab")
+        .forEach(tab => {
 
-            button.addEventListener(
+            tab.addEventListener(
                 "click",
                 () => {
 
                     const page =
-                        button.dataset.page;
+                        tab.dataset.page;
 
 
                     document
-                        .querySelectorAll(".nav-tab")
-                        .forEach(tab => {
-
-                            tab.classList.remove(
+                        .querySelectorAll(".tab")
+                        .forEach(item => {
+                            item.classList.remove(
                                 "active"
                             );
-
                         });
-
-
-                    button.classList.add(
-                        "active"
-                    );
 
 
                     document
                         .querySelectorAll(".page")
-                        .forEach(section => {
-
-                            section.classList.remove(
+                        .forEach(item => {
+                            item.classList.remove(
                                 "active"
                             );
-
                         });
+
+
+                    tab.classList.add(
+                        "active"
+                    );
 
 
                     const target =
@@ -416,11 +352,9 @@ function setupNavigation() {
 
 
                     if (target) {
-
                         target.classList.add(
                             "active"
                         );
-
                     }
 
 
@@ -437,74 +371,278 @@ function setupNavigation() {
 
 
 /* =========================================================
+   CARTE DE SORTIE
+   ========================================================= */
+
+function createReleaseCard(
+    release,
+    originalIndex
+) {
+
+    const title =
+        releaseTitle(release);
+
+    const artist =
+        releaseArtist(release);
+
+    const date =
+        releaseDate(release);
+
+    const image =
+        releaseImage(release);
+
+    const type =
+        releaseType(release);
+
+
+    return `
+
+        <article
+            class="release-card"
+            data-index="${originalIndex}"
+            tabindex="0"
+        >
+
+            ${
+                image
+
+                    ? `
+
+                        <img
+                            src="${escapeHTML(image)}"
+                            alt="${escapeHTML(title)}"
+                            class="release-image"
+                            loading="lazy"
+                        >
+
+                      `
+
+                    : `
+
+                        <div class="release-image no-image">
+                            ♪
+                        </div>
+
+                      `
+            }
+
+
+            <div class="release-content">
+
+                <span class="release-type">
+                    ${escapeHTML(type)}
+                </span>
+
+                <h3>
+                    ${escapeHTML(title)}
+                </h3>
+
+                <p>
+                    ${escapeHTML(artist)}
+                </p>
+
+                <time>
+                    ${formatDate(date)}
+                </time>
+
+            </div>
+
+        </article>
+    `;
+}
+
+
+/* =========================================================
+   RENDU SORTIES DU JOUR
+   ========================================================= */
+
+function renderToday() {
+
+    const container =
+        $("today-releases");
+
+
+    const today =
+        getToday();
+
+
+    const data =
+        releases
+            .map(
+                (release, index) => ({
+                    release,
+                    index
+                })
+            )
+            .filter(
+                item =>
+                    releaseDate(
+                        item.release
+                    ) === today
+            );
+
+
+    $("today-count").textContent =
+        data.length;
+
+
+    if (!data.length) {
+
+        container.innerHTML = `
+
+            <div class="empty">
+
+                <strong>
+                    Aucune sortie aujourd'hui
+                </strong>
+
+                <p>
+                    Aucune sortie n'a été trouvée pour
+                    ${formatDate(today)}.
+                </p>
+
+            </div>
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML =
+        data
+            .map(
+                item =>
+                    createReleaseCard(
+                        item.release,
+                        item.index
+                    )
+            )
+            .join("");
+
+
+    setupReleaseCards(container);
+
+}
+
+
+/* =========================================================
+   TOUTES LES SORTIES
+   ========================================================= */
+
+function renderAllReleases() {
+
+    const container =
+        $("all-releases");
+
+
+    const search =
+        $("release-search")
+            .value
+            .toLowerCase()
+            .trim();
+
+
+    let data =
+        releases
+            .map(
+                (release, index) => ({
+                    release,
+                    index
+                })
+            );
+
+
+    if (search) {
+
+        data =
+            data.filter(
+                item => {
+
+                    const text =
+                        `${releaseTitle(item.release)}
+                         ${releaseArtist(item.release)}`
+                            .toLowerCase();
+
+
+                    return text.includes(search);
+
+                }
+            );
+
+    }
+
+
+    data.sort(
+        (a, b) =>
+            releaseDate(b.release)
+                .localeCompare(
+                    releaseDate(a.release)
+                )
+    );
+
+
+    $("all-count").textContent =
+        data.length;
+
+
+    if (!data.length) {
+
+        container.innerHTML = `
+
+            <div class="empty">
+                Aucune sortie trouvée.
+            </div>
+
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML =
+        data
+            .map(
+                item =>
+                    createReleaseCard(
+                        item.release,
+                        item.index
+                    )
+            )
+            .join("");
+
+
+    setupReleaseCards(container);
+
+}
+
+
+/* =========================================================
    POPUP
    ========================================================= */
 
-function openModal(release) {
+function openReleaseModal(release) {
 
     const modal =
         $("release-modal");
 
 
-    if (!modal || !release) {
-        return;
-    }
-
-
     const title =
-        getReleaseTitle(release);
+        releaseTitle(release);
 
     const artist =
-        getReleaseArtist(release);
+        releaseArtist(release);
 
     const image =
-        getReleaseImage(release);
+        releaseImage(release);
 
     const url =
-        getReleaseURL(release);
+        releaseURL(release);
 
     const type =
-        getReleaseType(release);
+        releaseType(release);
 
     const date =
-        getReleaseDate(release);
-
-
-    const modalImage =
-        $("modal-image");
-
-
-    if (modalImage) {
-
-        if (image) {
-
-            modalImage.src =
-                image;
-
-            modalImage.alt =
-                `${title} — ${artist}`;
-
-            modalImage.style.display =
-                "block";
-
-        } else {
-
-            modalImage.removeAttribute(
-                "src"
-            );
-
-            modalImage.style.display =
-                "none";
-
-        }
-
-    }
-
-
-    $("modal-type").textContent =
-        type
-            ? type.toUpperCase()
-            : "SORTIE";
+        releaseDate(release);
 
 
     $("modal-title").textContent =
@@ -515,38 +653,62 @@ function openModal(release) {
         artist;
 
 
+    $("modal-type").textContent =
+        String(type).toUpperCase();
+
+
     $("modal-date").textContent =
-        `Sortie le ${formatReadableDate(date)}`;
+        `Date de sortie : ${formatDate(date)}`;
+
+
+    const cover =
+        $("modal-cover");
+
+
+    if (image) {
+
+        cover.src =
+            image;
+
+        cover.alt =
+            title;
+
+        cover.style.display =
+            "block";
+
+    } else {
+
+        cover.removeAttribute(
+            "src"
+        );
+
+        cover.style.display =
+            "none";
+
+    }
 
 
     const spotify =
         $("modal-spotify");
 
 
-    if (spotify) {
+    if (url) {
 
-        if (url) {
+        spotify.href =
+            url;
 
-            spotify.href =
-                url;
+        spotify.style.display =
+            "inline-flex";
 
-            spotify.style.display =
-                "inline-flex";
+    } else {
 
-        } else {
-
-            spotify.style.display =
-                "none";
-
-        }
+        spotify.style.display =
+            "none";
 
     }
 
 
-    modal.classList.add(
-        "open"
-    );
-
+    modal.classList.add("show");
 
     modal.setAttribute(
         "aria-hidden",
@@ -558,25 +720,17 @@ function openModal(release) {
         "modal-open"
     );
 
-
-    $("modal-close")?.focus();
-
 }
 
 
-function closeModal() {
+function closeReleaseModal() {
 
     const modal =
         $("release-modal");
 
 
-    if (!modal) {
-        return;
-    }
-
-
     modal.classList.remove(
-        "open"
+        "show"
     );
 
 
@@ -594,115 +748,10 @@ function closeModal() {
 
 
 /* =========================================================
-   CARTE DE SORTIE
+   CLIC SUR UNE SORTIE
    ========================================================= */
 
-function createReleaseCard(
-    release,
-    index
-) {
-
-    const title =
-        getReleaseTitle(release);
-
-    const artist =
-        getReleaseArtist(release);
-
-    const image =
-        getReleaseImage(release);
-
-    const type =
-        getReleaseType(release);
-
-
-    return `
-
-        <article
-            class="release-card"
-            data-release-index="${index}"
-            tabindex="0"
-            role="button"
-        >
-
-            ${
-                image
-
-                    ? `
-
-                        <img
-                            class="release-cover"
-                            src="${escapeHTML(image)}"
-                            alt="${escapeHTML(title)}"
-                            loading="lazy"
-                        >
-
-                      `
-
-                    : `
-
-                        <div class="release-cover release-cover-empty">
-                            ♪
-                        </div>
-
-                      `
-            }
-
-
-            <div class="release-information">
-
-                <div class="release-type">
-
-                    ${
-                        escapeHTML(
-                            type
-                                ? type.toUpperCase()
-                                : "SORTIE"
-                        )
-                    }
-
-                </div>
-
-
-                <div class="release-name">
-
-                    ${escapeHTML(title)}
-
-                </div>
-
-
-                <div class="release-artist">
-
-                    ${escapeHTML(artist)}
-
-                </div>
-
-
-                <div class="release-album">
-
-                    ${escapeHTML(
-                        formatDate(
-                            getReleaseDate(release)
-                        )
-                    )}
-
-                </div>
-
-            </div>
-
-        </article>
-
-    `;
-}
-
-
-/* =========================================================
-   CONNEXION DES CARTES AU POPUP
-   ========================================================= */
-
-function attachReleaseCardEvents(
-    container,
-    data
-) {
+function setupReleaseCards(container) {
 
     container
         .querySelectorAll(".release-card")
@@ -710,7 +759,7 @@ function attachReleaseCardEvents(
 
             const index =
                 Number(
-                    card.dataset.releaseIndex
+                    card.dataset.index
                 );
 
 
@@ -718,8 +767,8 @@ function attachReleaseCardEvents(
                 "click",
                 () => {
 
-                    openModal(
-                        data[index]
+                    openReleaseModal(
+                        releases[index]
                     );
 
                 }
@@ -737,8 +786,8 @@ function attachReleaseCardEvents(
 
                         event.preventDefault();
 
-                        openModal(
-                            data[index]
+                        openReleaseModal(
+                            releases[index]
                         );
 
                     }
@@ -752,211 +801,10 @@ function attachReleaseCardEvents(
 
 
 /* =========================================================
-   SORTIES DU JOUR
-   ========================================================= */
-
-function renderTodayReleases() {
-
-    const container =
-        $("release-list");
-
-
-    if (!container) {
-        return;
-    }
-
-
-    const search =
-        normalizeText(
-            $("release-search")
-                ?.value || ""
-        );
-
-
-    const today =
-        getTodayParis();
-
-
-    const data =
-        releases
-
-            .filter(
-                release =>
-                    getReleaseDate(release) === today
-            )
-
-            .filter(
-                release => {
-
-                    if (!search) {
-                        return true;
-                    }
-
-
-                    return normalizeText(
-                        `${getReleaseTitle(release)}
-                         ${getReleaseArtist(release)}`
-                    ).includes(search);
-
-                }
-            );
-
-
-    $("release-count").textContent =
-        formatNumber(data.length);
-
-
-    if (!data.length) {
-
-        container.innerHTML = `
-
-            <div class="empty">
-
-                <div class="empty-icon">
-                    ♪
-                </div>
-
-                <strong>
-                    Aucune sortie aujourd'hui
-                </strong>
-
-                <p>
-                    Aucune sortie prévue le
-                    ${escapeHTML(formatDate(today))}.
-                </p>
-
-            </div>
-
-        `;
-
-        return;
-    }
-
-
-    container.innerHTML =
-        data
-            .map(
-                (release, index) =>
-                    createReleaseCard(
-                        release,
-                        index
-                    )
-            )
-            .join("");
-
-
-    attachReleaseCardEvents(
-        container,
-        data
-    );
-
-}
-
-
-/* =========================================================
-   TOUTES LES SORTIES
-   ========================================================= */
-
-function renderAllReleases() {
-
-    const container =
-        $("all-release-list");
-
-
-    if (!container) {
-        return;
-    }
-
-
-    const search =
-        normalizeText(
-            $("all-release-search")
-                ?.value || ""
-        );
-
-
-    const data =
-        releases
-
-            .filter(
-                release => {
-
-                    if (!search) {
-                        return true;
-                    }
-
-
-                    return normalizeText(
-                        `${getReleaseTitle(release)}
-                         ${getReleaseArtist(release)}`
-                    ).includes(search);
-
-                }
-            )
-
-            .sort(
-                (a, b) => {
-
-                    const dateA =
-                        getReleaseDate(a);
-
-                    const dateB =
-                        getReleaseDate(b);
-
-
-                    return dateB.localeCompare(
-                        dateA
-                    );
-
-                }
-            );
-
-
-    $("all-release-count").textContent =
-        formatNumber(data.length);
-
-
-    if (!data.length) {
-
-        container.innerHTML = `
-
-            <div class="empty">
-
-                Aucune sortie trouvée.
-
-            </div>
-
-        `;
-
-        return;
-    }
-
-
-    container.innerHTML =
-        data
-            .map(
-                (release, index) =>
-                    createReleaseCard(
-                        release,
-                        index
-                    )
-            )
-            .join("");
-
-
-    attachReleaseCardEvents(
-        container,
-        data
-    );
-
-}
-
-
-/* =========================================================
    ARTISTES
    ========================================================= */
 
-function getArtistName(artist) {
+function artistName(artist) {
 
     if (typeof artist === "string") {
         return artist;
@@ -964,21 +812,21 @@ function getArtistName(artist) {
 
 
     return (
-        artist?.name ||
-        artist?.artist_name ||
-        artist?.artistName ||
-        "Artiste inconnu"
+        artist.name ||
+        artist.artist_name ||
+        artist.artistName ||
+        "Artiste"
     );
 }
 
 
-function getArtistImage(artist) {
+function artistImage(artist) {
 
     return (
-        artist?.image ||
-        artist?.image_url ||
-        artist?.imageUrl ||
-        artist?.images?.[0]?.url ||
+        artist.image ||
+        artist.image_url ||
+        artist.imageUrl ||
+        artist.images?.[0]?.url ||
         ""
     );
 }
@@ -987,80 +835,87 @@ function getArtistImage(artist) {
 function renderArtists() {
 
     const container =
-        $("artist-list");
+        $("artists-list");
 
 
-    if (!container) {
-        return;
-    }
+    let data =
+        artists;
 
 
     /*
-     * Si artistes.json existe,
-     * on l'utilise.
-     *
-     * Sinon on reconstruit la liste
-     * depuis sorties.json.
+     * Si artistes.json n'existe pas ou est vide,
+     * on récupère automatiquement les artistes
+     * présents dans sorties.json.
      */
 
-    let artistData =
-        artists.length
-            ? artists
-            : Array.from(
-                new Map(
-                    releases.map(
-                        release => {
+    if (!data.length) {
 
-                            const name =
-                                getReleaseArtist(
-                                    release
-                                );
+        const map =
+            new Map();
 
-                            return [
-                                name,
-                                {
-                                    name
-                                }
-                            ];
 
+        releases.forEach(
+            release => {
+
+                const name =
+                    releaseArtist(
+                        release
+                    );
+
+
+                if (!map.has(name)) {
+
+                    map.set(
+                        name,
+                        {
+                            name
                         }
-                    )
-                ).values()
+                    );
+
+                }
+
+            }
+        );
+
+
+        data =
+            Array.from(
+                map.values()
             );
+
+    }
 
 
     const search =
-        normalizeText(
-            $("artist-search")
-                ?.value || ""
-        );
+        $("artist-search")
+            .value
+            .toLowerCase()
+            .trim();
 
 
-    artistData =
-        artistData.filter(
-            artist =>
-                normalizeText(
-                    getArtistName(artist)
-                ).includes(search)
-        );
+    if (search) {
+
+        data =
+            data.filter(
+                artist =>
+                    artistName(artist)
+                        .toLowerCase()
+                        .includes(search)
+            );
+
+    }
 
 
-    $("artist-count").textContent =
-        formatNumber(
-            artistData.length
-        );
+    $("artists-count").textContent =
+        data.length;
 
 
-    if (!artistData.length) {
+    if (!data.length) {
 
         container.innerHTML = `
-
             <div class="empty">
-
                 Aucun artiste trouvé.
-
             </div>
-
         `;
 
         return;
@@ -1068,17 +923,17 @@ function renderArtists() {
 
 
     container.innerHTML =
-        artistData
+        data
             .map(
                 artist => {
 
                     const name =
-                        getArtistName(
+                        artistName(
                             artist
                         );
 
                     const image =
-                        getArtistImage(
+                        artistImage(
                             artist
                         );
 
@@ -1103,19 +958,16 @@ function renderArtists() {
 
                                     : `
 
-                                        <div class="artist-image artist-image-empty">
+                                        <div class="artist-image no-image">
                                             ♪
                                         </div>
 
                                       `
                             }
 
-
-                            <div class="artist-name">
-
+                            <strong>
                                 ${escapeHTML(name)}
-
-                            </div>
+                            </strong>
 
                         </div>
 
@@ -1135,82 +987,77 @@ function renderArtists() {
 function renderStats() {
 
     const today =
-        getTodayParis();
+        getToday();
 
 
-    const todayReleases =
+    const todayCount =
         releases.filter(
             release =>
-                getReleaseDate(release) === today
-        );
+                releaseDate(release) === today
+        ).length;
 
 
-    const artistNames =
+    const artistsSet =
         new Set(
             releases.map(
                 release =>
-                    getReleaseArtist(
-                        release
-                    )
+                    releaseArtist(release)
             )
         );
 
 
-    const albums =
-        releases.filter(
-            release =>
-                getReleaseType(release) === "album"
-        );
+    let albums = 0;
+    let singles = 0;
+    let eps = 0;
 
 
-    const singles =
-        releases.filter(
-            release =>
-                getReleaseType(release) === "single"
-        );
+    releases.forEach(
+        release => {
+
+            const type =
+                String(
+                    releaseType(release)
+                ).toLowerCase();
 
 
-    const eps =
-        releases.filter(
-            release =>
-                getReleaseType(release) === "ep"
-        );
+            if (type === "album") {
+                albums++;
+            }
+
+            else if (type === "single") {
+                singles++;
+            }
+
+            else if (type === "ep") {
+                eps++;
+            }
+
+        }
+    );
 
 
-    $("stat-total").textContent =
-        formatNumber(
-            releases.length
-        );
+    $("stat-releases").textContent =
+        releases.length;
 
 
     $("stat-today").textContent =
-        formatNumber(
-            todayReleases.length
-        );
+        todayCount;
 
 
     $("stat-artists").textContent =
-        formatNumber(
-            artistNames.size
-        );
+        artistsSet.size;
 
 
     $("stat-albums").textContent =
-        formatNumber(
-            albums.length
-        );
+        albums;
 
 
     $("stat-singles").textContent =
-        formatNumber(
-            singles.length
-        );
+        singles;
 
 
     $("stat-eps").textContent =
-        formatNumber(
-            eps.length
-        );
+        eps;
 
 
     renderArtistStats();
@@ -1224,11 +1071,6 @@ function renderArtistStats() {
         $("artist-stats");
 
 
-    if (!container) {
-        return;
-    }
-
-
     const counts = {};
 
 
@@ -1236,7 +1078,7 @@ function renderArtistStats() {
         release => {
 
             const artist =
-                getReleaseArtist(
+                releaseArtist(
                     release
                 );
 
@@ -1253,23 +1095,23 @@ function renderArtistStats() {
             .sort(
                 (a, b) =>
                     b[1] - a[1]
-            )
-            .slice(0, 15);
+            );
 
 
     container.innerHTML =
         sorted
+            .slice(0, 20)
             .map(
                 ([artist, count]) => `
 
-                    <div class="artist-stat-row">
+                    <div class="artist-stat">
 
                         <span>
                             ${escapeHTML(artist)}
                         </span>
 
                         <strong>
-                            ${formatNumber(count)}
+                            ${count}
                         </strong>
 
                     </div>
@@ -1282,97 +1124,87 @@ function renderArtistStats() {
 
 
 /* =========================================================
-   DATE HEADER
+   INITIALISATION
    ========================================================= */
 
-function displayCurrentDate() {
+async function init() {
 
     const today =
-        getTodayParis();
+        getToday();
 
 
     $("current-date").textContent =
         formatDate(today);
 
 
-    $("release-title").textContent =
-        `Nouvelles sorties — ${formatDate(today)}`;
-
-
-    $("release-description").textContent =
-        `Sorties prévues le ${formatReadableDate(today)}`;
-
-}
-
-
-/* =========================================================
-   CHARGEMENT
-   ========================================================= */
-
-async function initialize() {
-
-    displayCurrentDate();
+    $("today-description").textContent =
+        `Sorties du ${formatDate(today)}`;
 
 
     try {
 
-        const [
-            loadedReleases,
-            loadedArtists
-        ] =
-            await Promise.all([
-                loadReleases(),
-                loadArtists()
-            ]);
+        const releasesData =
+            await loadJSON(
+                RELEASES_URL
+            );
 
 
         releases =
-            loadedReleases;
-
-
-        artists =
-            loadedArtists;
-
-
-        console.log(
-            `${releases.length} sorties chargées`
-        );
-
-
-        renderTodayReleases();
-
-        renderAllReleases();
-
-        renderArtists();
-
-        renderStats();
+            extractReleases(
+                releasesData
+            );
 
 
     } catch (error) {
 
         console.error(
-            "Erreur de chargement :",
+            "Erreur sorties :",
             error
         );
 
 
-        $("release-list").innerHTML = `
-
+        $("today-releases").innerHTML = `
             <div class="empty">
-
-                <strong>
-                    Impossible de charger les données
-                </strong>
-
-                <p>
-                    ${escapeHTML(error.message)}
-                </p>
-
+                Impossible de charger sorties.json.
             </div>
-
         `;
 
     }
+
+
+    try {
+
+        const artistsData =
+            await loadJSON(
+                ARTISTS_URL
+            );
+
+
+        artists =
+            extractArtists(
+                artistsData
+            );
+
+
+    } catch (error) {
+
+        console.warn(
+            "artistes.json indisponible.",
+            error
+        );
+
+        artists = [];
+
+    }
+
+
+    renderToday();
+
+    renderAllReleases();
+
+    renderArtists();
+
+    renderStats();
 
 }
 
@@ -1385,63 +1217,36 @@ document.addEventListener(
     "DOMContentLoaded",
     () => {
 
-        setupNavigation();
+        setupTabs();
 
-
-        /*
-         * Recherche sorties du jour
-         */
 
         $("release-search")
-            ?.addEventListener(
-                "input",
-                renderTodayReleases
-            );
-
-
-        /*
-         * Recherche toutes les sorties
-         */
-
-        $("all-release-search")
-            ?.addEventListener(
+            .addEventListener(
                 "input",
                 renderAllReleases
             );
 
 
-        /*
-         * Recherche artistes
-         */
-
         $("artist-search")
-            ?.addEventListener(
+            .addEventListener(
                 "input",
                 renderArtists
             );
 
 
-        /*
-         * Fermeture popup
-         */
-
         $("modal-close")
-            ?.addEventListener(
+            .addEventListener(
                 "click",
-                closeModal
+                closeReleaseModal
             );
 
 
-        $("modal-overlay")
-            ?.addEventListener(
+        $("modal-background")
+            .addEventListener(
                 "click",
-                closeModal
+                closeReleaseModal
             );
 
-
-        /*
-         * Échap
-         */
 
         document.addEventListener(
             "keydown",
@@ -1451,7 +1256,7 @@ document.addEventListener(
                     event.key === "Escape"
                 ) {
 
-                    closeModal();
+                    closeReleaseModal();
 
                 }
 
@@ -1459,7 +1264,7 @@ document.addEventListener(
         );
 
 
-        initialize();
+        init();
 
     }
 );
