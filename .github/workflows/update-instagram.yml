@@ -1,0 +1,69 @@
+name: Enregistrer un compte Instagram
+
+on:
+  repository_dispatch:
+    types: [instagram-update]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: instagram-update-${{ github.event.client_payload.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  save-instagram:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Installer Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Appliquer et publier la mise à jour
+        env:
+          ARTIST_ID: ${{ github.event.client_payload.artist_id }}
+          INSTAGRAM_URL: ${{ github.event.client_payload.instagram_url }}
+          INSTAGRAM_USERNAME: ${{ github.event.client_payload.instagram_username }}
+          INSTAGRAM_STATUS: ${{ github.event.client_payload.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+
+            python scripts/save_instagram.py
+
+            git add data/artistes.json
+
+            if git diff --cached --quiet; then
+              echo "Aucune modification nécessaire."
+              exit 0
+            fi
+
+            git commit -m "Mise à jour Instagram: ${ARTIST_ID}"
+
+            if git push origin HEAD:main; then
+              echo "Mise à jour publiée."
+              exit 0
+            fi
+
+            echo "Nouvelle tentative après un conflit..."
+            sleep "$((attempt * 2))"
+          done
+
+          echo "Échec après cinq tentatives."
+          exit 1
