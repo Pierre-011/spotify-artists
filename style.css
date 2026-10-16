@@ -1066,3 +1066,171 @@ footer {
         transition: none !important;
     }
 }
+/* ==========================================
+   INSTAGRAM FINDER
+   ========================================== */
+
+.finder-progress-panel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+
+    margin-bottom: 18px;
+    padding: 18px 20px;
+
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.finder-progress-panel span {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.instagram-finder-card {
+    max-width: 850px;
+    padding: 28px;
+
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+}
+
+.finder-kicker {
+    color: var(--spotify);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+}
+
+.finder-artist-name {
+    margin-top: 10px;
+    margin-bottom: 8px;
+
+    font-size: 36px;
+    font-weight: 800;
+
+    overflow-wrap: anywhere;
+}
+
+.finder-meta {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+}
+
+.finder-links,
+.finder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+
+    margin-top: 22px;
+}
+
+.finder-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 11px 15px;
+
+    border: 1px solid var(--border);
+    border-radius: 9px;
+
+    background: var(--surface-light);
+    color: var(--text);
+
+    text-decoration: none;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+
+    cursor: pointer;
+    transition: border-color 0.2s, opacity 0.2s;
+}
+
+.finder-button:hover {
+    border-color: var(--spotify);
+}
+
+.finder-button.primary {
+    background: var(--spotify);
+    color: #071108;
+    border-color: var(--spotify);
+}
+
+.finder-button.subtle {
+    color: var(--text-secondary);
+}
+
+.finder-label {
+    display: block;
+
+    margin-top: 26px;
+    margin-bottom: 8px;
+
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.instagram-finder-card input {
+    width: 100%;
+    max-width: none;
+    box-sizing: border-box;
+}
+
+.finder-message {
+    margin-top: 8px;
+    color: #ffb4a8;
+    font-size: 13px;
+}
+
+.finder-note {
+    margin-top: 22px;
+
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.7;
+}
+
+.instagram-complete {
+    padding: 25px 0;
+    text-align: center;
+}
+
+.instagram-complete h3 {
+    font-size: 24px;
+}
+
+.instagram-complete p {
+    color: var(--text-secondary);
+    line-height: 1.7;
+}
+
+.instagram-emoji {
+    font-size: 42px;
+}
+
+@media (max-width: 700px) {
+    .finder-progress-panel {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .instagram-finder-card {
+        padding: 20px;
+    }
+
+    .finder-artist-name {
+        font-size: 29px;
+    }
+
+    .finder-button {
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
