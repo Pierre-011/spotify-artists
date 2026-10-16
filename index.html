@@ -25,6 +25,7 @@
             <button class="nav-button" data-page="artists">👤 Artistes</button> 
             <button class="nav-button" data-page="all-releases">📅 Toutes les sorties</button> 
             <button class="nav-button" data-page="stats">📊 Statistiques</button> 
+            <button class="nav-button" data-page="instagram-finder">📸 Instagram Finder</button>
         </nav> 
         <main> <!-- SORTIES DU JOUR --> 
             <section id="page-releases" class="page active"> 
@@ -162,12 +163,50 @@
                     </div> 
                 </div> 
             </section> 
+<!-- INSTAGRAM FINDER -->
+<section id="page-instagram-finder" class="page">
+
+    <div class="page-header">
+        <div>
+            <span class="section-label">
+                ENRICHISSEMENT DE LA BASE
+            </span>
+
+            <h2>Instagram Finder</h2>
+
+            <p>
+                Recherche le profil Instagram de tes artistes
+                et enrichis progressivement ta base de données.
+            </p>
+        </div>
+    </div>
+
+    <div class="finder-progress-panel">
+        <strong>Ta progression</strong>
+
+        <span id="instagram-progress">
+            Chargement de la progression…
+        </span>
+    </div>
+
+    <div
+        id="instagram-finder-card"
+        class="instagram-finder-card"
+    >
+        <div class="loading">
+            Chargement des artistes…
+        </div>
+    </div>
+
+</section>
+<!-- FIN INSTAGRAM FINDER -->
         </main> 
         <footer> 
             <div>Spotify Artists Dashboard</div> 
             <div>Données : artistes.json / sorties.json</div> 
         </footer> 
         <script src="app.js"></script> 
+        <script src="instagram-finder.js"></script>
     </body> 
 </html>
     
