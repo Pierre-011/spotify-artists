@@ -1234,3 +1234,50 @@ footer {
         box-sizing: border-box;
     }
 }
+.release-card.clickable,
+.catalog-release-card.clickable {
+    cursor: pointer;
+}
+
+.release-card.clickable:hover,
+.catalog-release-card.clickable:hover {
+    border-color: var(--spotify);
+}
+
+.spotify-player-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+}
+
+.spotify-player-bar.hidden {
+    display: none;
+}
+
+.player-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+    font-size: 13px;
+}
+
+.player-icon {
+    color: var(--spotify);
+}
+
+.player-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+}
