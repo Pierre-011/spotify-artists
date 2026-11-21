@@ -31,6 +31,14 @@ function formatNumber(value) {
 
 const normalizeText = (value) => String(value ?? "").toLowerCase();
 
+function debounce(fn, delay = 200) {
+    let timer;
+    return (...args) => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn(...args), delay);
+    };
+}
+
 /* ========== DATES ========== */
 
 function getTodayParis() {
@@ -137,6 +145,9 @@ function matchesSearch(release, search) {
 
 /* ========== LECTEUR SPOTIFY INTÉGRÉ (sans compte Premium) ========== */
 
+let currentEmbedKey = null;
+let playerResizeObserver = null;
+
 function updatePlayerStatus(message) {
     const status = $("player-status");
     const bar = $("spotify-player-bar");
@@ -148,8 +159,24 @@ function updatePlayerStatus(message) {
 function closePlayer() {
     $("spotify-player-bar")?.classList.add("hidden");
     document.body.classList.remove("has-player");
+
     const embed = $("player-embed");
-    if (embed) embed.innerHTML = ""; // supprime le lecteur, ce qui coupe la lecture
+    if (embed) {
+        embed.innerHTML = ""; // supprime le lecteur : la lecture et son coût s'arrêtent
+        delete embed.dataset.type;
+    }
+    currentEmbedKey = null;
+}
+
+// Adapte l'espace réservé en bas de page à la hauteur réelle de la barre.
+function watchPlayerHeight() {
+    const bar = $("spotify-player-bar");
+    if (!bar || playerResizeObserver || !("ResizeObserver" in window)) return;
+
+    playerResizeObserver = new ResizeObserver(() => {
+        document.documentElement.style.setProperty("--player-height", `${bar.offsetHeight}px`);
+    });
+    playerResizeObserver.observe(bar);
 }
 
 function getEmbedInfo(release) {
@@ -181,15 +208,21 @@ function playRelease(release) {
     const container = $("player-embed");
     if (!container) return;
 
-    const height = info.type === "track" || info.type === "episode" ? 80 : 152;
+    updatePlayerStatus(`${title} — ${artist}`);
+
+    // Même sortie déjà chargée : on ne recharge pas le lecteur (évite un chargement inutile).
+    const key = `${info.type}:${info.id}`;
+    if (key === currentEmbedKey && container.firstElementChild) return;
+    currentEmbedKey = key;
+
+    const kind = info.type === "track" || info.type === "episode" ? "track" : "album";
+    container.dataset.type = kind;
 
     container.innerHTML =
         `<iframe title="Lecteur Spotify" ` +
         `src="https://open.spotify.com/embed/${info.type}/${info.id}?utm_source=generator" ` +
-        `width="100%" height="${height}" frameborder="0" loading="lazy" ` +
+        `width="100%" height="${kind === "track" ? 80 : 152}" frameborder="0" ` +
         `allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>`;
-
-    updatePlayerStatus(`${title} — ${artist}`);
 }
 
 /* ========== DATE DU JOUR ========== */
@@ -233,7 +266,7 @@ function renderReleases() {
                 <article class="release-card clickable" data-index="${index}">
                     ${
                         image
-                            ? `<img class="release-cover" src="${escapeHTML(image)}" alt="${escapeHTML(title)}" loading="lazy">`
+                            ? `<img class="release-cover" src="${escapeHTML(image)}" alt="${escapeHTML(title)}" loading="lazy" decoding="async">`
                             : `<div class="release-cover"></div>`
                     }
                     <div class="release-information">
@@ -275,7 +308,7 @@ function renderCatalogCard(release, date, index) {
             <div class="catalog-cover-wrapper">
                 ${
                     image
-                        ? `<img class="catalog-cover" src="${escapeHTML(image)}" alt="${escapeHTML(title)}" loading="lazy">`
+                        ? `<img class="catalog-cover" src="${escapeHTML(image)}" alt="${escapeHTML(title)}" loading="lazy" decoding="async">`
                         : `<div class="catalog-cover catalog-cover-empty"><span>♪</span></div>`
                 }
                 ${
@@ -722,10 +755,11 @@ document.addEventListener("DOMContentLoaded", () => {
     ];
 
     for (const [id, event, handler] of bindings) {
-        $(id)?.addEventListener(event, handler);
+        $(id)?.addEventListener(event, event === "input" ? debounce(handler, 200) : handler);
     }
 
     setupNavigation();
+    watchPlayerHeight();
 
     const closeButton = $("player-close");
     if (closeButton) {
