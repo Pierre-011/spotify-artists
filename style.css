@@ -1281,3 +1281,63 @@ footer {
     cursor: pointer;
     font-size: 14px;
 }
+/* Lecteur Spotify intégré (barre du bas) */
+
+.spotify-player-bar {
+    gap: 16px;
+}
+
+.player-info {
+    flex: 0 1 260px;
+    min-width: 0;
+}
+
+#player-status {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.player-embed {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 720px;
+}
+
+.player-embed:empty {
+    display: none;
+}
+
+.player-embed iframe {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 12px;
+}
+
+/* Laisse la place à la barre pour ne pas masquer le bas de la page */
+body.has-player {
+    padding-bottom: 190px;
+}
+
+@media (max-width: 700px) {
+    .spotify-player-bar {
+        flex-wrap: wrap;
+        padding-right: 44px;
+    }
+
+    .player-info {
+        flex: 1 1 100%;
+    }
+
+    .player-embed {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+
+    .player-close {
+        position: absolute;
+        top: 8px;
+        right: 12px;
+    }
+}
