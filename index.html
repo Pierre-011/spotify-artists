@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spotify Artists Dashboard</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="player.css">
 </head>
 
 <body>
@@ -22,10 +23,6 @@
                     <span>Aujourd'hui</span>
                     <strong id="current-date">--</strong>
                 </div>
-
-                <button id="spotify-login" class="finder-button primary" type="button">
-                    Se connecter à Spotify
-                </button>
             </div>
         </div>
     </header>
@@ -279,8 +276,10 @@
     <div id="spotify-player-bar" class="spotify-player-bar hidden">
         <div class="player-info">
             <span class="player-icon">▶</span>
-            <span id="player-status">Spotify prêt</span>
+            <span id="player-status">Lecteur Spotify</span>
         </div>
+
+        <div id="player-embed" class="player-embed"></div>
 
         <button id="player-close" class="player-close" type="button">✕</button>
     </div>
@@ -290,7 +289,7 @@
         <div>Données : artistes.json / sorties.json</div>
     </footer>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
     <script src="instagram-finder.js"></script>
 </body>
 </html>
