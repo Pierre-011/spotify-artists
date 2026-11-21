@@ -8,7 +8,6 @@ let releases = [];
 let currentPage = "releases";
 let statsCache = null;
 
-/* Conserve la structure originale de artistes.json */
 window.spotifyArtistsRawData = null;
 
 
@@ -28,6 +27,7 @@ let spotifyDeviceId = null;
 let spotifyUserToken = null;
 let spotifyAppToken = null;
 let spotifyReady = false;
+let spotifyInitStarted = false;
 
 
 /* ========== SPOTIFY : PKCE (CONNEXION UTILISATEUR) ========== */
@@ -63,157 +63,186 @@ async function generateCodeChallenge(verifier) {
 }
 
 async function startSpotifyLogin() {
-    const verifier = generateRandomString(64);
-    const challenge = await generateCodeChallenge(verifier);
+    try {
+        const verifier = generateRandomString(64);
+        const challenge = await generateCodeChallenge(verifier);
 
-    localStorage.setItem(
-        "spotify_code_verifier",
-        verifier
-    );
+        localStorage.setItem(
+            "spotify_code_verifier",
+            verifier
+        );
 
-    const url =
-        "https://accounts.spotify.com/authorize?" +
-        new URLSearchParams({
-            response_type: "code",
-            client_id: SPOTIFY_CLIENT_ID,
-            scope: SPOTIFY_SCOPES.join(" "),
-            redirect_uri: SPOTIFY_REDIRECT_URI,
-            code_challenge_method: "S256",
-            code_challenge: challenge
-        });
+        const url =
+            "https://accounts.spotify.com/authorize?" +
+            new URLSearchParams({
+                response_type: "code",
+                client_id: SPOTIFY_CLIENT_ID,
+                scope: SPOTIFY_SCOPES.join(" "),
+                redirect_uri: SPOTIFY_REDIRECT_URI,
+                code_challenge_method: "S256",
+                code_challenge: challenge
+            });
 
-    window.location.href = url;
+        window.location.href = url;
+    } catch (error) {
+        console.error(
+            "Erreur connexion Spotify :",
+            error
+        );
+    }
 }
 
 async function handleSpotifyCallback() {
-    const params = new URLSearchParams(
-        window.location.search
-    );
+    try {
+        const params = new URLSearchParams(
+            window.location.search
+        );
 
-    const code = params.get("code");
+        const code = params.get("code");
 
-    if (!code) {
-        return false;
-    }
-
-    const verifier = localStorage.getItem(
-        "spotify_code_verifier"
-    );
-
-    if (!verifier) {
-        return false;
-    }
-
-    const response = await fetch(
-        "https://accounts.spotify.com/api/token",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type":
-                    "application/x-www-form-urlencoded"
-            },
-            body: new URLSearchParams({
-                grant_type: "authorization_code",
-                code,
-                redirect_uri: SPOTIFY_REDIRECT_URI,
-                client_id: SPOTIFY_CLIENT_ID,
-                code_verifier: verifier
-            })
+        if (!code) {
+            return false;
         }
-    );
 
-    const data = await response.json();
+        const verifier = localStorage.getItem(
+            "spotify_code_verifier"
+        );
 
-    if (!data.access_token) {
+        if (!verifier) {
+            return false;
+        }
+
+        const response = await fetch(
+            "https://accounts.spotify.com/api/token",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type":
+                        "application/x-www-form-urlencoded"
+                },
+                body: new URLSearchParams({
+                    grant_type: "authorization_code",
+                    code,
+                    redirect_uri: SPOTIFY_REDIRECT_URI,
+                    client_id: SPOTIFY_CLIENT_ID,
+                    code_verifier: verifier
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!data.access_token) {
+            return false;
+        }
+
+        spotifyUserToken = data.access_token;
+
+        localStorage.setItem(
+            "spotify_access_token",
+            data.access_token
+        );
+
+        localStorage.setItem(
+            "spotify_refresh_token",
+            data.refresh_token || ""
+        );
+
+        localStorage.setItem(
+            "spotify_token_expires_at",
+            String(
+                Date.now() +
+                    (data.expires_in ?? 3600) * 1000
+            )
+        );
+
+        window.history.replaceState(
+            {},
+            "",
+            window.location.pathname
+        );
+
+        return true;
+    } catch (error) {
+        console.error(
+            "Erreur callback Spotify :",
+            error
+        );
+
         return false;
     }
-
-    spotifyUserToken = data.access_token;
-
-    localStorage.setItem(
-        "spotify_access_token",
-        data.access_token
-    );
-
-    localStorage.setItem(
-        "spotify_refresh_token",
-        data.refresh_token || ""
-    );
-
-    localStorage.setItem(
-        "spotify_token_expires_at",
-        String(
-            Date.now() + (data.expires_in ?? 3600) * 1000
-        )
-    );
-
-    window.history.replaceState(
-        {},
-        "",
-        window.location.pathname
-    );
-
-    return true;
 }
 
 async function refreshSpotifyUserToken() {
-    const refreshToken = localStorage.getItem(
-        "spotify_refresh_token"
-    );
-
-    if (!refreshToken) {
-        return false;
-    }
-
-    const response = await fetch(
-        "https://accounts.spotify.com/api/token",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type":
-                    "application/x-www-form-urlencoded"
-            },
-            body: new URLSearchParams({
-                grant_type: "refresh_token",
-                refresh_token: refreshToken,
-                client_id: SPOTIFY_CLIENT_ID
-            })
-        }
-    );
-
-    const data = await response.json();
-
-    if (!data.access_token) {
-        return false;
-    }
-
-    spotifyUserToken = data.access_token;
-
-    localStorage.setItem(
-        "spotify_access_token",
-        data.access_token
-    );
-
-    localStorage.setItem(
-        "spotify_token_expires_at",
-        String(
-            Date.now() + (data.expires_in ?? 3600) * 1000
-        )
-    );
-
-    if (data.refresh_token) {
-        localStorage.setItem(
-            "spotify_refresh_token",
-            data.refresh_token
+    try {
+        const refreshToken = localStorage.getItem(
+            "spotify_refresh_token"
         );
-    }
 
-    return true;
+        if (!refreshToken) {
+            return false;
+        }
+
+        const response = await fetch(
+            "https://accounts.spotify.com/api/token",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type":
+                        "application/x-www-form-urlencoded"
+                },
+                body: new URLSearchParams({
+                    grant_type: "refresh_token",
+                    refresh_token: refreshToken,
+                    client_id: SPOTIFY_CLIENT_ID
+                })
+            }
+        );
+
+        const data = await response.json();
+
+        if (!data.access_token) {
+            return false;
+        }
+
+        spotifyUserToken = data.access_token;
+
+        localStorage.setItem(
+            "spotify_access_token",
+            data.access_token
+        );
+
+        localStorage.setItem(
+            "spotify_token_expires_at",
+            String(
+                Date.now() +
+                    (data.expires_in ?? 3600) * 1000
+            )
+        );
+
+        if (data.refresh_token) {
+            localStorage.setItem(
+                "spotify_refresh_token",
+                data.refresh_token
+            );
+        }
+
+        return true;
+    } catch (error) {
+        console.error(
+            "Erreur refresh Spotify :",
+            error
+        );
+
+        return false;
+    }
 }
 
 async function getSpotifyAccessToken() {
     const expiresAt = Number(
-        localStorage.getItem("spotify_token_expires_at")
+        localStorage.getItem(
+            "spotify_token_expires_at"
+        )
     );
 
     if (
@@ -238,17 +267,14 @@ async function getSpotifyAccessToken() {
         return spotifyUserToken;
     }
 
-    const refreshed = await refreshSpotifyUserToken();
+    const refreshed =
+        await refreshSpotifyUserToken();
 
     if (refreshed) {
         return spotifyUserToken;
     }
 
-    await startSpotifyLogin();
-
-    throw new Error(
-        "Connexion Spotify requise."
-    );
+    return null;
 }
 
 
@@ -277,9 +303,7 @@ async function getSpotifyAppToken() {
     );
 
     if (!response.ok) {
-        throw new Error(
-            "Impossible de récupérer le token Spotify (app)."
-        );
+        return null;
     }
 
     const data = await response.json();
@@ -293,67 +317,167 @@ async function getSpotifyAppToken() {
 /* ========== SPOTIFY WEB PLAYBACK SDK ========== */
 
 function loadSpotifySDK() {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         if (window.Spotify) {
             resolve();
             return;
         }
 
-        window.onSpotifyWebPlaybackSDKReady = () => resolve();
+        window.onSpotifyWebPlaybackSDKReady =
+            () => resolve();
 
-        const script = document.createElement("script");
-        script.src = "https://sdk.scdn.co/spotify-player.js";
+        const script =
+            document.createElement("script");
+
+        script.src =
+            "https://sdk.scdn.co/spotify-player.js";
         script.async = true;
+
+        script.onerror = () =>
+            reject(
+                new Error(
+                    "Impossible de charger le SDK Spotify."
+                )
+            );
+
         document.body.appendChild(script);
     });
 }
 
 async function initSpotifyPlayer() {
     if (spotifyReady) {
-        return;
+        return true;
     }
 
-    await loadSpotifySDK();
+    if (spotifyInitStarted) {
+        return false;
+    }
 
-    const token = await getSpotifyAccessToken();
+    spotifyInitStarted = true;
 
-    spotifyPlayer = new Spotify.Player({
-        name: "Spotify Artists Dashboard",
-        getOAuthToken: (callback) => {
-            getSpotifyAccessToken().then(callback);
+    try {
+        const token =
+            await getSpotifyAccessToken();
+
+        if (!token) {
+            updatePlayerStatus(
+                "Connexion Spotify requise — clique sur « Se connecter à Spotify »."
+            );
+
+            return false;
         }
-    });
 
-    spotifyPlayer.addListener("ready", ({ device_id }) => {
-        spotifyDeviceId = device_id;
-        spotifyReady = true;
-        updatePlayerStatus(
-            "Spotify prêt — clique sur une sortie"
-        );
-    });
+        await loadSpotifySDK();
 
-    spotifyPlayer.addListener("not_ready", () => {
-        spotifyReady = false;
-        updatePlayerStatus("Spotify déconnecté");
-    });
-
-    spotifyPlayer.addListener(
-        "player_state_changed",
-        (state) => {
-            if (!state) return;
-
-            const track =
-                state.track_window.current_track;
-
-            if (track) {
-                updatePlayerStatus(
-                    `Lecture : ${track.name} — ${track.artists[0].name}`
+        spotifyPlayer = new Spotify.Player({
+            name: "Spotify Artists Dashboard",
+            getOAuthToken: (callback) => {
+                getSpotifyAccessToken().then(
+                    token => {
+                        if (token) {
+                            callback(token);
+                        }
+                    }
                 );
             }
-        }
-    );
+        });
 
-    spotifyPlayer.connect();
+        spotifyPlayer.addListener(
+            "ready",
+            ({ device_id }) => {
+                spotifyDeviceId = device_id;
+                spotifyReady = true;
+
+                updatePlayerStatus(
+                    "Spotify prêt — clique sur une sortie"
+                );
+            }
+        );
+
+        spotifyPlayer.addListener(
+            "not_ready",
+            () => {
+                spotifyReady = false;
+                updatePlayerStatus(
+                    "Spotify déconnecté"
+                );
+            }
+        );
+
+        spotifyPlayer.addListener(
+            "initialization_error",
+            ({ message }) => {
+                console.error(
+                    "Spotify init error :",
+                    message
+                );
+
+                updatePlayerStatus(
+                    "Erreur Spotify : " + message
+                );
+            }
+        );
+
+        spotifyPlayer.addListener(
+            "authentication_error",
+            ({ message }) => {
+                console.error(
+                    "Spotify auth error :",
+                    message
+                );
+
+                updatePlayerStatus(
+                    "Erreur Spotify : " + message
+                );
+            }
+        );
+
+        spotifyPlayer.addListener(
+            "account_error",
+            ({ message }) => {
+                console.error(
+                    "Spotify account error :",
+                    message
+                );
+
+                updatePlayerStatus(
+                    "Erreur Spotify : " + message
+                );
+            }
+        );
+
+        spotifyPlayer.addListener(
+            "player_state_changed",
+            (state) => {
+                if (!state) return;
+
+                const track =
+                    state.track_window
+                        .current_track;
+
+                if (track) {
+                    updatePlayerStatus(
+                        `Lecture : ${track.name} — ${track.artists[0].name}`
+                    );
+                }
+            }
+        );
+
+        spotifyPlayer.connect();
+
+        return true;
+    } catch (error) {
+        console.error(
+            "Erreur initialisation Spotify :",
+            error
+        );
+
+        updatePlayerStatus(
+            "Erreur Spotify : " + error.message
+        );
+
+        return false;
+    }
 }
 
 function updatePlayerStatus(message) {
@@ -402,6 +526,10 @@ async function searchTrackUri(release) {
 
     const token = await getSpotifyAppToken();
 
+    if (!token) {
+        return null;
+    }
+
     const response = await fetch(
         `https://api.spotify.com/v1/search?q=${query}&type=track&limit=1`,
         {
@@ -423,7 +551,14 @@ async function searchTrackUri(release) {
 
 async function playRelease(release) {
     try {
-        await initSpotifyPlayer();
+        if (!spotifyReady) {
+            const initialized =
+                await initSpotifyPlayer();
+
+            if (!initialized) {
+                return;
+            }
+        }
 
         if (!spotifyReady || !spotifyDeviceId) {
             updatePlayerStatus(
@@ -447,7 +582,16 @@ async function playRelease(release) {
             return;
         }
 
-        const token = await getSpotifyAccessToken();
+        const token =
+            await getSpotifyAccessToken();
+
+        if (!token) {
+            updatePlayerStatus(
+                "Connexion Spotify requise."
+            );
+
+            return;
+        }
 
         const response = await fetch(
             `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`,
@@ -476,7 +620,11 @@ async function playRelease(release) {
             "Lecture lancée sur Spotify"
         );
     } catch (error) {
-        console.error("Erreur Spotify :", error);
+        console.error(
+            "Erreur Spotify :",
+            error
+        );
+
         updatePlayerStatus(
             "Erreur Spotify : " + error.message
         );
@@ -512,22 +660,29 @@ function formatNumber(value) {
 
     return Number.isNaN(n)
         ? escapeHTML(value)
-        : new Intl.NumberFormat("fr-FR").format(n);
+        : new Intl.NumberFormat(
+              "fr-FR"
+          ).format(n);
 }
 
 const normalizeText = value =>
-    String(value ?? "").toLocaleLowerCase("fr-FR");
+    String(value ?? "").toLocaleLowerCase(
+        "fr-FR"
+    );
 
 
 /* ========== DATES ========== */
 
 function getTodayParis() {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Europe/Paris",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit"
-    }).formatToParts(new Date());
+    const parts = new Intl.DateTimeFormat(
+        "en-CA",
+        {
+            timeZone: "Europe/Paris",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit"
+        }
+    ).formatToParts(new Date());
 
     const result = {};
 
@@ -609,11 +764,11 @@ function formatReadableDate(value) {
 
     return date
         ? date.toLocaleDateString("fr-FR", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            year: "numeric"
-        })
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric"
+          })
         : "Date inconnue";
 }
 
@@ -653,7 +808,9 @@ async function loadJSON(path) {
     const text = await response.text();
 
     if (!text.trim()) {
-        throw new Error(`${path} est vide.`);
+        throw new Error(
+            `${path} est vide.`
+        );
     }
 
     try {
@@ -736,9 +893,9 @@ function parseReleases(data) {
 const getReleaseDate = release =>
     normalizeDate(
         release?.release_date ??
-        release?.releaseDate ??
-        release?.date ??
-        ""
+            release?.releaseDate ??
+            release?.date ??
+            ""
     );
 
 const getReleaseTitle = release =>
@@ -769,14 +926,12 @@ const getReleaseURL = release =>
 const getReleaseType = release =>
     String(
         release?.release_type ||
-        release?.releaseType ||
-        ""
+            release?.releaseType ||
+            ""
     ).trim().toLowerCase();
 
 const getArtistName = artist =>
-    artist?.name ||
-    artist?.artist_name ||
-    "";
+    artist?.name || artist?.artist_name || "";
 
 function matchesSearch(release, search) {
     if (!search) {
@@ -791,7 +946,9 @@ function matchesSearch(release, search) {
         .filter(Boolean)
         .join(" ");
 
-    return normalizeText(text).includes(search);
+    return normalizeText(text).includes(
+        search
+    );
 }
 
 
@@ -833,9 +990,11 @@ function renderReleases() {
     const today = getTodayParis();
 
     const list = releases
-        .filter(release =>
-            getReleaseDate(release) === today &&
-            matchesSearch(release, search)
+        .filter(
+            release =>
+                getReleaseDate(release) ===
+                    today &&
+                matchesSearch(release, search)
         )
         .sort((a, b) =>
             getReleaseTitle(a).localeCompare(
@@ -1041,8 +1200,8 @@ function renderCatalogCard(
                             date === "unknown"
                                 ? "—"
                                 : escapeHTML(
-                                    formatDate(date)
-                                )
+                                      formatDate(date)
+                                  )
                         }
                     </span>
 
@@ -1264,8 +1423,7 @@ function renderArtists() {
     );
 
     const sort =
-        $("artist-sort")?.value ||
-        "name";
+        $("artist-sort")?.value || "name";
 
     const filtered = artists.filter(
         artist =>
@@ -1334,7 +1492,8 @@ function renderArtists() {
 
             const url =
                 artist.url ||
-                artist.external_urls?.spotify ||
+                artist.external_urls
+                    ?.spotify ||
                 "";
 
             return `
@@ -1375,8 +1534,8 @@ function renderArtists() {
                                 undefined &&
                             popularity !== null
                                 ? escapeHTML(
-                                    popularity
-                                )
+                                      popularity
+                                  )
                                 : "—"
                         }
                     </td>
@@ -1556,9 +1715,9 @@ function calculateStatistics() {
         duration:
             oldest && newest
                 ? Math.round(
-                    (newest - oldest) /
-                        86400000
-                )
+                      (newest - oldest) /
+                          86400000
+                  )
                 : 0,
 
         busiest
@@ -2070,26 +2229,13 @@ async function initialize() {
         renderPage("instagram-finder");
     }
 
-    /* Connexion Spotify (callback PKCE) */
-    const loggedIn =
-        await handleSpotifyCallback();
-
-    if (loggedIn) {
-        await initSpotifyPlayer();
-    }
-
-    /* Si un token est déjà présent, on initialise le lecteur */
-    const storedToken = localStorage.getItem(
-        "spotify_access_token"
+    /* Callback Spotify : uniquement si ?code= est présent */
+    const urlParams = new URLSearchParams(
+        window.location.search
     );
 
-    if (storedToken) {
-        initSpotifyPlayer().catch(error => {
-            console.error(
-                "Erreur initialisation Spotify :",
-                error
-            );
-        });
+    if (urlParams.get("code")) {
+        await handleSpotifyCallback();
     }
 }
 
@@ -2163,3 +2309,16 @@ document.addEventListener(
 
         if (loginButton) {
             loginButton.addEventListener(
+                "click",
+                startSpotifyLogin
+            );
+        }
+
+        initialize().catch(error => {
+            console.error(
+                "Erreur pendant l'initialisation du dashboard :",
+                error
+            );
+        });
+    }
+);
