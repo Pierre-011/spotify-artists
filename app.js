@@ -12,17 +12,285 @@ let statsCache = null;
 window.spotifyArtistsRawData = null;
 
 
-/* ========== SPOTIFY WEB PLAYBACK SDK ========== */
+/* ========== SPOTIFY IDENTIFIANTS ========== */
 
-const SPOTIFY_CONFIG = {
-    tokenEndpoint: "/api/spotify/token",
-    searchEndpoint: "/api/spotify/search"
-};
+const SPOTIFY_CLIENT_ID = "670e4b53420b45fcb95cd5d224c25f6d";
+const SPOTIFY_CLIENT_SECRET = "f9bce195db5042b1abbdd979f75e2874";
+const SPOTIFY_REDIRECT_URI = "http://127.0.0.1:3000/";
+const SPOTIFY_SCOPES = [
+    "streaming",
+    "user-read-email",
+    "user-read-private"
+];
 
 let spotifyPlayer = null;
 let spotifyDeviceId = null;
-let spotifyAccessToken = null;
+let spotifyUserToken = null;
+let spotifyAppToken = null;
 let spotifyReady = false;
+
+
+/* ========== SPOTIFY : PKCE (CONNEXION UTILISATEUR) ========== */
+
+function generateRandomString(length) {
+    const possible =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+    let text = "";
+
+    for (let i = 0; i < length; i++) {
+        text += possible.charAt(
+            Math.floor(Math.random() * possible.length)
+        );
+    }
+
+    return text;
+}
+
+async function generateCodeChallenge(verifier) {
+    const data = new TextEncoder().encode(verifier);
+    const digest = await crypto.subtle.digest(
+        "SHA-256",
+        data
+    );
+
+    return btoa(
+        String.fromCharCode(...new Uint8Array(digest))
+    )
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+}
+
+async function startSpotifyLogin() {
+    const verifier = generateRandomString(64);
+    const challenge = await generateCodeChallenge(verifier);
+
+    localStorage.setItem(
+        "spotify_code_verifier",
+        verifier
+    );
+
+    const url =
+        "https://accounts.spotify.com/authorize?" +
+        new URLSearchParams({
+            response_type: "code",
+            client_id: SPOTIFY_CLIENT_ID,
+            scope: SPOTIFY_SCOPES.join(" "),
+            redirect_uri: SPOTIFY_REDIRECT_URI,
+            code_challenge_method: "S256",
+            code_challenge: challenge
+        });
+
+    window.location.href = url;
+}
+
+async function handleSpotifyCallback() {
+    const params = new URLSearchParams(
+        window.location.search
+    );
+
+    const code = params.get("code");
+
+    if (!code) {
+        return false;
+    }
+
+    const verifier = localStorage.getItem(
+        "spotify_code_verifier"
+    );
+
+    if (!verifier) {
+        return false;
+    }
+
+    const response = await fetch(
+        "https://accounts.spotify.com/api/token",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type":
+                    "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({
+                grant_type: "authorization_code",
+                code,
+                redirect_uri: SPOTIFY_REDIRECT_URI,
+                client_id: SPOTIFY_CLIENT_ID,
+                code_verifier: verifier
+            })
+        }
+    );
+
+    const data = await response.json();
+
+    if (!data.access_token) {
+        return false;
+    }
+
+    spotifyUserToken = data.access_token;
+
+    localStorage.setItem(
+        "spotify_access_token",
+        data.access_token
+    );
+
+    localStorage.setItem(
+        "spotify_refresh_token",
+        data.refresh_token || ""
+    );
+
+    localStorage.setItem(
+        "spotify_token_expires_at",
+        String(
+            Date.now() + (data.expires_in ?? 3600) * 1000
+        )
+    );
+
+    window.history.replaceState(
+        {},
+        "",
+        window.location.pathname
+    );
+
+    return true;
+}
+
+async function refreshSpotifyUserToken() {
+    const refreshToken = localStorage.getItem(
+        "spotify_refresh_token"
+    );
+
+    if (!refreshToken) {
+        return false;
+    }
+
+    const response = await fetch(
+        "https://accounts.spotify.com/api/token",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type":
+                    "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({
+                grant_type: "refresh_token",
+                refresh_token: refreshToken,
+                client_id: SPOTIFY_CLIENT_ID
+            })
+        }
+    );
+
+    const data = await response.json();
+
+    if (!data.access_token) {
+        return false;
+    }
+
+    spotifyUserToken = data.access_token;
+
+    localStorage.setItem(
+        "spotify_access_token",
+        data.access_token
+    );
+
+    localStorage.setItem(
+        "spotify_token_expires_at",
+        String(
+            Date.now() + (data.expires_in ?? 3600) * 1000
+        )
+    );
+
+    if (data.refresh_token) {
+        localStorage.setItem(
+            "spotify_refresh_token",
+            data.refresh_token
+        );
+    }
+
+    return true;
+}
+
+async function getSpotifyAccessToken() {
+    const expiresAt = Number(
+        localStorage.getItem("spotify_token_expires_at")
+    );
+
+    if (
+        spotifyUserToken &&
+        expiresAt &&
+        Date.now() < expiresAt - 60000
+    ) {
+        return spotifyUserToken;
+    }
+
+    const storedToken = localStorage.getItem(
+        "spotify_access_token"
+    );
+
+    if (
+        storedToken &&
+        expiresAt &&
+        Date.now() < expiresAt - 60000
+    ) {
+        spotifyUserToken = storedToken;
+
+        return spotifyUserToken;
+    }
+
+    const refreshed = await refreshSpotifyUserToken();
+
+    if (refreshed) {
+        return spotifyUserToken;
+    }
+
+    await startSpotifyLogin();
+
+    throw new Error(
+        "Connexion Spotify requise."
+    );
+}
+
+
+/* ========== SPOTIFY : CLIENT CREDENTIALS (APP TOKEN) ========== */
+
+async function getSpotifyAppToken() {
+    if (spotifyAppToken) {
+        return spotifyAppToken;
+    }
+
+    const response = await fetch(
+        "https://accounts.spotify.com/api/token",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type":
+                    "application/x-www-form-urlencoded",
+                Authorization:
+                    "Basic " +
+                    btoa(
+                        `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
+                    )
+            },
+            body: "grant_type=client_credentials"
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            "Impossible de récupérer le token Spotify (app)."
+        );
+    }
+
+    const data = await response.json();
+
+    spotifyAppToken = data.access_token;
+
+    return spotifyAppToken;
+}
+
+
+/* ========== SPOTIFY WEB PLAYBACK SDK ========== */
 
 function loadSpotifySDK() {
     return new Promise((resolve) => {
@@ -38,23 +306,6 @@ function loadSpotifySDK() {
         script.async = true;
         document.body.appendChild(script);
     });
-}
-
-async function getSpotifyAccessToken() {
-    if (spotifyAccessToken) {
-        return spotifyAccessToken;
-    }
-
-    const response = await fetch(SPOTIFY_CONFIG.tokenEndpoint);
-
-    if (!response.ok) {
-        throw new Error("Impossible de récupérer le token Spotify.");
-    }
-
-    const data = await response.json();
-    spotifyAccessToken = data.access_token;
-
-    return spotifyAccessToken;
 }
 
 async function initSpotifyPlayer() {
@@ -76,7 +327,9 @@ async function initSpotifyPlayer() {
     spotifyPlayer.addListener("ready", ({ device_id }) => {
         spotifyDeviceId = device_id;
         spotifyReady = true;
-        updatePlayerStatus("Spotify prêt — clique sur une sortie");
+        updatePlayerStatus(
+            "Spotify prêt — clique sur une sortie"
+        );
     });
 
     spotifyPlayer.addListener("not_ready", () => {
@@ -84,17 +337,21 @@ async function initSpotifyPlayer() {
         updatePlayerStatus("Spotify déconnecté");
     });
 
-    spotifyPlayer.addListener("player_state_changed", (state) => {
-        if (!state) return;
+    spotifyPlayer.addListener(
+        "player_state_changed",
+        (state) => {
+            if (!state) return;
 
-        const track = state.track_window.current_track;
+            const track =
+                state.track_window.current_track;
 
-        if (track) {
-            updatePlayerStatus(
-                `Lecture : ${track.name} — ${track.artists[0].name}`
-            );
+            if (track) {
+                updatePlayerStatus(
+                    `Lecture : ${track.name} — ${track.artists[0].name}`
+                );
+            }
         }
-    });
+    );
 
     spotifyPlayer.connect();
 }
@@ -124,7 +381,9 @@ function getTrackUri(release) {
     const url = getReleaseURL(release);
 
     if (url) {
-        const match = url.match(/track\/([a-zA-Z0-9]+)/);
+        const match = url.match(
+            /track\/([a-zA-Z0-9]+)/
+        );
 
         if (match) {
             return `spotify:track:${match[1]}`;
@@ -137,9 +396,11 @@ function getTrackUri(release) {
 async function searchTrackUri(release) {
     const title = getReleaseTitle(release);
     const artist = getReleaseArtist(release);
-    const query = encodeURIComponent(`${artist} ${title}`);
+    const query = encodeURIComponent(
+        `${artist} ${title}`
+    );
 
-    const token = await getSpotifyAccessToken();
+    const token = await getSpotifyAppToken();
 
     const response = await fetch(
         `https://api.spotify.com/v1/search?q=${query}&type=track&limit=1`,
@@ -194,7 +455,8 @@ async function playRelease(release) {
                 method: "PUT",
                 headers: {
                     Authorization: `Bearer ${token}`,
-                    "Content-Type": "application/json"
+                    "Content-Type":
+                        "application/json"
                 },
                 body: JSON.stringify({
                     uris: [uri]
@@ -210,10 +472,14 @@ async function playRelease(release) {
             return;
         }
 
-        updatePlayerStatus("Lecture lancée sur Spotify");
+        updatePlayerStatus(
+            "Lecture lancée sur Spotify"
+        );
     } catch (error) {
         console.error("Erreur Spotify :", error);
-        updatePlayerStatus("Erreur Spotify : " + error.message);
+        updatePlayerStatus(
+            "Erreur Spotify : " + error.message
+        );
     }
 }
 
@@ -281,13 +547,17 @@ function normalizeDate(value) {
 
     const string = String(value).trim();
 
-    const iso = string.match(/^(\d{4}-\d{2}-\d{2})/);
+    const iso = string.match(
+        /^(\d{4}-\d{2}-\d{2})/
+    );
 
     if (iso) {
         return iso[1];
     }
 
-    const french = string.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    const french = string.match(
+        /^(\d{2})\/(\d{2})\/(\d{4})/
+    );
 
     return french
         ? `${french[3]}-${french[2]}-${french[1]}`
@@ -328,7 +598,8 @@ function formatDate(value) {
         return "—";
     }
 
-    const [year, month, day] = normalized.split("-");
+    const [year, month, day] =
+        normalized.split("-");
 
     return `${day}/${month}/${year}`;
 }
@@ -411,7 +682,9 @@ function parseArtists(data) {
         data.artists &&
         typeof data.artists === "object"
     ) {
-        return Object.values(data.artists).filter(Boolean);
+        return Object.values(
+            data.artists
+        ).filter(Boolean);
     }
 
     if (
@@ -589,8 +862,10 @@ function renderReleases() {
 
     container.innerHTML = list
         .map((release, index) => {
-            const title = getReleaseTitle(release);
-            const image = getReleaseImage(release);
+            const title =
+                getReleaseTitle(release);
+            const image =
+                getReleaseImage(release);
             const url = getReleaseURL(release);
 
             return `
@@ -631,7 +906,9 @@ function renderReleases() {
                         </div>
 
                         <div class="release-album">
-                            ${escapeHTML(formatDate(today))}
+                            ${escapeHTML(
+                                formatDate(today)
+                            )}
                         </div>
 
                         ${
@@ -665,7 +942,10 @@ function renderReleases() {
             return;
         }
 
-        const index = Number(card.dataset.releaseIndex);
+        const index = Number(
+            card.dataset.releaseIndex
+        );
+
         const release = list[index];
 
         if (release) {
@@ -677,12 +957,17 @@ function renderReleases() {
 
 /* ========== TOUTES LES SORTIES ========== */
 
-function renderCatalogCard(release, date, index) {
+function renderCatalogCard(
+    release,
+    date,
+    index
+) {
     const title = getReleaseTitle(release);
     const artist = getReleaseArtist(release);
     const image = getReleaseImage(release);
     const url = getReleaseURL(release);
-    const type = getReleaseType(release) || "release";
+    const type =
+        getReleaseType(release) || "release";
 
     return `
         <article
@@ -730,7 +1015,9 @@ function renderCatalogCard(release, date, index) {
             <div class="catalog-information">
 
                 <div class="catalog-type">
-                    ${escapeHTML(type.toUpperCase())}
+                    ${escapeHTML(
+                        type.toUpperCase()
+                    )}
                 </div>
 
                 <div
@@ -753,7 +1040,9 @@ function renderCatalogCard(release, date, index) {
                         ${
                             date === "unknown"
                                 ? "—"
-                                : escapeHTML(formatDate(date))
+                                : escapeHTML(
+                                    formatDate(date)
+                                )
                         }
                     </span>
 
@@ -780,7 +1069,9 @@ function renderCatalogCard(release, date, index) {
 }
 
 function renderAllReleases() {
-    const container = $("all-release-list");
+    const container = $(
+        "all-release-list"
+    );
 
     if (!container) {
         return;
@@ -795,7 +1086,8 @@ function renderAllReleases() {
         "newest";
 
     const filtered = releases.filter(
-        release => matchesSearch(release, search)
+        release =>
+            matchesSearch(release, search)
     );
 
     filtered.sort((a, b) => {
@@ -849,7 +1141,9 @@ function renderAllReleases() {
     const groups = new Map();
 
     for (const release of filtered) {
-        const date = getReleaseDate(release) || "unknown";
+        const date =
+            getReleaseDate(release) ||
+            "unknown";
 
         if (!groups.has(date)) {
             groups.set(date, []);
@@ -874,7 +1168,11 @@ function renderAllReleases() {
                     <div>
 
                         <span class="release-day-label">
-                            ${unknown ? "DATE INCONNUE" : "SORTIES"}
+                            ${
+                                unknown
+                                    ? "DATE INCONNUE"
+                                    : "SORTIES"
+                            }
                         </span>
 
                         <h3>
@@ -891,7 +1189,11 @@ function renderAllReleases() {
 
                     <span class="release-day-count">
                         ${formatNumber(items.length)}
-                        ${items.length > 1 ? "sorties" : "sortie"}
+                        ${
+                            items.length > 1
+                                ? "sorties"
+                                : "sortie"
+                        }
                     </span>
 
                 </div>
@@ -900,13 +1202,17 @@ function renderAllReleases() {
 
                     ${items
                         .map(release => {
-                            flatIndex.set(currentIndex, release);
-
-                            const card = renderCatalogCard(
-                                release,
-                                date,
-                                currentIndex
+                            flatIndex.set(
+                                currentIndex,
+                                release
                             );
+
+                            const card =
+                                renderCatalogCard(
+                                    release,
+                                    date,
+                                    currentIndex
+                                );
 
                             currentIndex++;
 
@@ -931,7 +1237,10 @@ function renderAllReleases() {
             return;
         }
 
-        const index = Number(card.dataset.releaseIndex);
+        const index = Number(
+            card.dataset.releaseIndex
+        );
+
         const release = flatIndex.get(index);
 
         if (release) {
@@ -958,8 +1267,11 @@ function renderArtists() {
         $("artist-sort")?.value ||
         "name";
 
-    const filtered = artists.filter(artist =>
-        normalizeText(getArtistName(artist)).includes(search)
+    const filtered = artists.filter(
+        artist =>
+            normalizeText(
+                getArtistName(artist)
+            ).includes(search)
     );
 
     if (sort === "followers") {
@@ -1011,9 +1323,12 @@ function renderArtists() {
                 artist.monthly_listeners ??
                 artist.monthlyListeners;
 
-            const popularity = artist.popularity;
+            const popularity =
+                artist.popularity;
 
-            const genres = Array.isArray(artist.genres)
+            const genres = Array.isArray(
+                artist.genres
+            )
                 ? artist.genres.join(", ")
                 : "";
 
@@ -1045,7 +1360,9 @@ function renderArtists() {
                     </td>
 
                     <td>
-                        ${formatNumber(artist.followers)}
+                        ${formatNumber(
+                            artist.followers
+                        )}
                     </td>
 
                     <td>
@@ -1054,15 +1371,20 @@ function renderArtists() {
 
                     <td>
                         ${
-                            popularity !== undefined &&
+                            popularity !==
+                                undefined &&
                             popularity !== null
-                                ? escapeHTML(popularity)
+                                ? escapeHTML(
+                                    popularity
+                                )
                                 : "—"
                         }
                     </td>
 
                     <td class="genres-cell">
-                        ${escapeHTML(genres || "—")}
+                        ${escapeHTML(
+                            genres || "—"
+                        )}
                     </td>
 
                     <td>
@@ -1110,7 +1432,8 @@ function calculateStatistics() {
     };
 
     for (const release of releases) {
-        const name = getReleaseArtist(release);
+        const name =
+            getReleaseArtist(release);
 
         const id =
             release.artist_id ||
@@ -1146,7 +1469,10 @@ function calculateStatistics() {
         if (date) {
             dates.push(date);
 
-            const key = toISO(date).slice(0, 7);
+            const key = toISO(date).slice(
+                0,
+                7
+            );
 
             monthMap.set(
                 key,
@@ -1155,7 +1481,9 @@ function calculateStatistics() {
         }
     }
 
-    const today = parseLocalDate(getTodayParis());
+    const today = parseLocalDate(
+        getTodayParis()
+    );
 
     const countLastDays = days => {
         if (!today) {
@@ -1169,7 +1497,8 @@ function calculateStatistics() {
         );
 
         return dates.filter(
-            date => date >= start && date <= today
+            date =>
+                date >= start && date <= today
         ).length;
     };
 
@@ -1205,7 +1534,9 @@ function calculateStatistics() {
         activeArtists: artistMap.size,
         types,
 
-        topArtists: [...artistMap.values()]
+        topArtists: [
+            ...artistMap.values()
+        ]
             .sort(
                 (a, b) =>
                     b.count - a.count ||
@@ -1213,10 +1544,11 @@ function calculateStatistics() {
             )
             .slice(0, 10),
 
-        months: [...monthMap.entries()]
-            .sort((a, b) =>
-                a[0].localeCompare(b[0])
-            ),
+        months: [
+            ...monthMap.entries()
+        ].sort((a, b) =>
+            a[0].localeCompare(b[0])
+        ),
 
         oldest,
         newest,
@@ -1224,7 +1556,8 @@ function calculateStatistics() {
         duration:
             oldest && newest
                 ? Math.round(
-                    (newest - oldest) / 86400000
+                    (newest - oldest) /
+                        86400000
                 )
                 : 0,
 
@@ -1245,53 +1578,89 @@ function setText(id, value) {
 function renderStatistics() {
     const s = calculateStatistics();
 
-    setText("stats-total", formatNumber(s.total));
-    setText("stats-7-days", formatNumber(s.last7));
-    setText("stats-30-days", formatNumber(s.last30));
-    setText("stats-365-days", formatNumber(s.last365));
-    setText("stats-artists-count", formatNumber(s.activeArtists));
-    setText("stats-singles", formatNumber(s.types.single));
-    setText("stats-albums", formatNumber(s.types.album));
-    setText("stats-eps", formatNumber(s.types.ep));
-    setText("stats-other", formatNumber(s.types.other));
+    setText(
+        "stats-total",
+        formatNumber(s.total)
+    );
+    setText(
+        "stats-7-days",
+        formatNumber(s.last7)
+    );
+    setText(
+        "stats-30-days",
+        formatNumber(s.last30)
+    );
+    setText(
+        "stats-365-days",
+        formatNumber(s.last365)
+    );
+    setText(
+        "stats-artists-count",
+        formatNumber(s.activeArtists)
+    );
+    setText(
+        "stats-singles",
+        formatNumber(s.types.single)
+    );
+    setText(
+        "stats-albums",
+        formatNumber(s.types.album)
+    );
+    setText(
+        "stats-eps",
+        formatNumber(s.types.ep)
+    );
+    setText(
+        "stats-other",
+        formatNumber(s.types.other)
+    );
 
     /* Top artistes */
 
-    const artistsContainer = $("stats-artists");
+    const artistsContainer = $(
+        "stats-artists"
+    );
 
     if (artistsContainer) {
-        artistsContainer.innerHTML = s.topArtists.length
-            ? s.topArtists
-                .map((artist, index) => `
-                    <div class="stats-row">
+        artistsContainer.innerHTML =
+            s.topArtists.length
+                ? s.topArtists
+                      .map((artist, index) => `
+                          <div class="stats-row">
 
-                        <span>
+                              <span>
 
-                            <span class="artist-rank">
-                                ${index + 1}
-                            </span>
+                                  <span class="artist-rank">
+                                      ${index + 1}
+                                  </span>
 
-                            ${escapeHTML(artist.name)}
+                                  ${escapeHTML(
+                                      artist.name
+                                  )}
 
-                        </span>
+                              </span>
 
-                        <strong>
-                            ${formatNumber(artist.count)}
-                        </strong>
+                              <strong>
+                                  ${formatNumber(
+                                      artist.count
+                                  )}
+                              </strong>
 
-                    </div>
-                `)
-                .join("")
-            : `
-                <div class="empty">
-                    Aucune donnée disponible.
-                </div>
-            `;
+                          </div>
+                      `)
+                      .join("")
+                : `
+                      <div class="empty">
+                          Aucune donnée disponible.
+                      </div>
+                  `;
     }
 
     /* Évolution mensuelle */
 
-    const monthsContainer = $("stats-months");
+    const monthsContainer = $(
+        "stats-months"
+    );
 
     if (monthsContainer) {
         if (!s.months.length) {
@@ -1302,41 +1671,46 @@ function renderStatistics() {
             `;
         } else {
             const max = Math.max(
-                ...s.months.map(month => month[1])
+                ...s.months.map(
+                    month => month[1]
+                )
             );
 
-            monthsContainer.innerHTML = s.months
-                .map(([key, count]) => `
-                    <div class="monthly-stat-row">
+            monthsContainer.innerHTML =
+                s.months
+                    .map(([key, count]) => `
+                        <div class="monthly-stat-row">
 
-                        <div class="monthly-stat-header">
+                            <div class="monthly-stat-header">
 
-                            <span>
-                                ${escapeHTML(formatMonth(key))}
-                            </span>
+                                <span>
+                                    ${escapeHTML(
+                                        formatMonth(key)
+                                    )}
+                                </span>
 
-                            <strong>
-                                ${formatNumber(count)}
-                            </strong>
+                                <strong>
+                                    ${formatNumber(count)}
+                                </strong>
+
+                            </div>
+
+                            <div class="monthly-bar">
+
+                                <div
+                                    class="monthly-bar-fill"
+                                    style="width:${
+                                        max > 0
+                                            ? (count / max) * 100
+                                            : 0
+                                    }%"
+                                ></div>
+
+                            </div>
 
                         </div>
-
-                        <div class="monthly-bar">
-
-                            <div
-                                class="monthly-bar-fill"
-                                style="width:${
-                                    max > 0
-                                        ? (count / max) * 100
-                                        : 0
-                                }%"
-                            ></div>
-
-                        </div>
-
-                    </div>
-                `)
-                .join("");
+                    `)
+                    .join("");
         }
     }
 
@@ -1381,11 +1755,15 @@ function renderStatistics() {
         <p>
             Les sorties couvrent la période du
             <strong>
-                ${escapeHTML(formatDate(toISO(s.oldest)))}
+                ${escapeHTML(
+                    formatDate(toISO(s.oldest))
+                )}
             </strong>
             au
             <strong>
-                ${escapeHTML(formatDate(toISO(s.newest)))}
+                ${escapeHTML(
+                    formatDate(toISO(s.newest))
+                )}
             </strong>,
             soit
             <strong>${formatNumber(s.duration)}</strong>
@@ -1398,11 +1776,15 @@ function renderStatistics() {
             <p>
                 L'artiste avec le plus de sorties est
                 <strong>
-                    ${escapeHTML(s.topArtists[0].name)}
+                    ${escapeHTML(
+                        s.topArtists[0].name
+                    )}
                 </strong>
                 avec
                 <strong>
-                    ${formatNumber(s.topArtists[0].count)}
+                    ${formatNumber(
+                        s.topArtists[0].count
+                    )}
                 </strong>
                 sortie(s).
             </p>
@@ -1414,11 +1796,15 @@ function renderStatistics() {
             <p>
                 Le mois avec le plus de sorties est
                 <strong>
-                    ${escapeHTML(formatMonth(s.busiest.key))}
+                    ${escapeHTML(
+                        formatMonth(s.busiest.key)
+                    )}
                 </strong>
                 avec
                 <strong>
-                    ${formatNumber(s.busiest.count)}
+                    ${formatNumber(
+                        s.busiest.count
+                    )}
                 </strong>
                 sortie(s).
             </p>
@@ -1432,7 +1818,9 @@ function renderStatistics() {
 /* ========== INSTAGRAM FINDER ========== */
 
 function renderInstagramFinder() {
-    const container = $("instagram-finder-card");
+    const container = $(
+        "instagram-finder-card"
+    );
 
     if (!container) {
         console.warn(
@@ -1453,11 +1841,15 @@ function renderInstagramFinder() {
     }
 
     document.dispatchEvent(
-        new CustomEvent("instagram-finder-open", {
-            detail: {
-                artists: window.spotifyArtistsRawData
+        new CustomEvent(
+            "instagram-finder-open",
+            {
+                detail: {
+                    artists:
+                        window.spotifyArtistsRawData
+                }
             }
-        })
+        )
     );
 }
 
@@ -1468,20 +1860,17 @@ function renderPage(target) {
     try {
         if (target === "releases") {
             renderReleases();
-
         } else if (target === "artists") {
             renderArtists();
-
         } else if (target === "all-releases") {
             renderAllReleases();
-
         } else if (target === "stats") {
             renderStatistics();
-
-        } else if (target === "instagram-finder") {
+        } else if (
+            target === "instagram-finder"
+        ) {
             renderInstagramFinder();
         }
-
     } catch (error) {
         console.error(
             `Erreur d'affichage (${target}) :`,
@@ -1491,35 +1880,45 @@ function renderPage(target) {
 }
 
 function setupNavigation() {
-    const buttons = document.querySelectorAll(".nav-button");
-    const pages = document.querySelectorAll(".page");
+    const buttons = document.querySelectorAll(
+        ".nav-button"
+    );
+
+    const pages = document.querySelectorAll(
+        ".page"
+    );
 
     buttons.forEach(button => {
-        button.addEventListener("click", () => {
-            const target = button.dataset.page;
+        button.addEventListener(
+            "click",
+            () => {
+                const target =
+                    button.dataset.page;
 
-            if (!target) {
-                return;
+                if (!target) {
+                    return;
+                }
+
+                currentPage = target;
+
+                buttons.forEach(navButton => {
+                    navButton.classList.toggle(
+                        "active",
+                        navButton === button
+                    );
+                });
+
+                pages.forEach(page => {
+                    page.classList.toggle(
+                        "active",
+                        page.id ===
+                            `page-${target}`
+                    );
+                });
+
+                renderPage(target);
             }
-
-            currentPage = target;
-
-            buttons.forEach(navButton => {
-                navButton.classList.toggle(
-                    "active",
-                    navButton === button
-                );
-            });
-
-            pages.forEach(page => {
-                page.classList.toggle(
-                    "active",
-                    page.id === `page-${target}`
-                );
-            });
-
-            renderPage(target);
-        });
+        );
     });
 }
 
@@ -1564,9 +1963,14 @@ async function initialize() {
 
     /* Chargement des sorties */
 
-    if (releasesResult.status === "fulfilled") {
+    if (
+        releasesResult.status === "fulfilled"
+    ) {
         try {
-            releases = parseReleases(releasesResult.value);
+            releases = parseReleases(
+                releasesResult.value
+            );
+
             statsCache = null;
         } catch (error) {
             console.error(
@@ -1585,26 +1989,40 @@ async function initialize() {
             "Erreur inconnue";
 
         showError("release-list", message);
-        showError("all-release-list", message);
-        showError("stats-summary", message);
+        showError(
+            "all-release-list",
+            message
+        );
+        showError(
+            "stats-summary",
+            message
+        );
     }
 
     /* Chargement des artistes */
 
-    if (artistsResult.status === "fulfilled") {
-        window.spotifyArtistsRawData = artistsResult.value;
+    if (
+        artistsResult.status === "fulfilled"
+    ) {
+        window.spotifyArtistsRawData =
+            artistsResult.value;
 
-        artists = parseArtists(artistsResult.value);
-
-        document.dispatchEvent(
-            new CustomEvent("spotify-artists-loaded", {
-                detail: {
-                    rawData: window.spotifyArtistsRawData,
-                    artists
-                }
-            })
+        artists = parseArtists(
+            artistsResult.value
         );
 
+        document.dispatchEvent(
+            new CustomEvent(
+                "spotify-artists-loaded",
+                {
+                    detail: {
+                        rawData:
+                            window.spotifyArtistsRawData,
+                        artists
+                    }
+                }
+            )
+        );
     } else {
         console.error(
             "Erreur artistes.json :",
@@ -1626,62 +2044,122 @@ async function initialize() {
             `;
         }
 
-        showError("instagram-finder-card", message);
+        showError(
+            "instagram-finder-card",
+            message
+        );
     }
 
     /* Affichage initial */
 
-    if (releasesResult.status === "fulfilled") {
+    if (
+        releasesResult.status === "fulfilled"
+    ) {
         renderPage("releases");
     }
 
-    if (artistsResult.status === "fulfilled") {
+    if (
+        artistsResult.status === "fulfilled"
+    ) {
         renderPage("artists");
     }
 
-    if (currentPage === "instagram-finder") {
+    if (
+        currentPage === "instagram-finder"
+    ) {
         renderPage("instagram-finder");
     }
 
-    /* Préparation du lecteur Spotify */
-    initSpotifyPlayer().catch(error => {
-        console.error(
-            "Erreur initialisation Spotify :",
-            error
-        );
-    });
+    /* Connexion Spotify (callback PKCE) */
+    const loggedIn =
+        await handleSpotifyCallback();
+
+    if (loggedIn) {
+        await initSpotifyPlayer();
+    }
+
+    /* Si un token est déjà présent, on initialise le lecteur */
+    const storedToken = localStorage.getItem(
+        "spotify_access_token"
+    );
+
+    if (storedToken) {
+        initSpotifyPlayer().catch(error => {
+            console.error(
+                "Erreur initialisation Spotify :",
+                error
+            );
+        });
+    }
 }
 
 
 /* ========== DÉMARRAGE ========== */
 
-document.addEventListener("DOMContentLoaded", () => {
-    const bindings = [
-        ["release-search", "input", renderReleases],
-        ["artist-search", "input", renderArtists],
-        ["artist-sort", "change", renderArtists],
-        ["all-release-search", "input", renderAllReleases],
-        ["all-release-sort", "change", renderAllReleases]
-    ];
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+        const bindings = [
+            [
+                "release-search",
+                "input",
+                renderReleases
+            ],
+            [
+                "artist-search",
+                "input",
+                renderArtists
+            ],
+            [
+                "artist-sort",
+                "change",
+                renderArtists
+            ],
+            [
+                "all-release-search",
+                "input",
+                renderAllReleases
+            ],
+            [
+                "all-release-sort",
+                "change",
+                renderAllReleases
+            ]
+        ];
 
-    for (const [id, event, handler] of bindings) {
-        $(id)?.addEventListener(event, handler);
-    }
+        for (const [
+            id,
+            event,
+            handler
+        ] of bindings) {
+            $(id)?.addEventListener(
+                event,
+                handler
+            );
+        }
 
-    setupNavigation();
+        setupNavigation();
 
-    const closeButton = $("player-close");
-
-    if (closeButton) {
-        closeButton.addEventListener("click", () => {
-            $("spotify-player-bar")?.classList.add("hidden");
-        });
-    }
-
-    initialize().catch(error => {
-        console.error(
-            "Erreur pendant l'initialisation du dashboard :",
-            error
+        const closeButton = $(
+            "player-close"
         );
-    });
-});
+
+        if (closeButton) {
+            closeButton.addEventListener(
+                "click",
+                () => {
+                    $(
+                        "spotify-player-bar"
+                    )?.classList.add(
+                        "hidden"
+                    );
+                }
+            );
+        }
+
+        const loginButton = $(
+            "spotify-login"
+        );
+
+        if (loginButton) {
+            loginButton.addEventListener(
