@@ -4,9 +4,9 @@ const ARTISTS_FILE = "./data/artistes.json";
 const RELEASES_FILE = "./data/sorties.json";
 
 const SPOTIFY_CLIENT_ID = "670e4b53420b45fcb95cd5d224c25f6d";
-const SPOTIFY_CLIENT_SECRET = "f9bce195db5042b1abbdd979f75e2874";
 const SPOTIFY_REDIRECT_URI = "http://127.0.0.1:3000/";
-const SPOTIFY_SCOPES = "streaming user-read-email user-read-private";
+const SPOTIFY_SCOPES =
+    "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state";
 
 let artists = [];
 let releases = [];
@@ -16,8 +16,9 @@ let statsCache = null;
 let spotifyPlayer = null;
 let spotifyDeviceId = null;
 let spotifyUserToken = null;
-let spotifyAppToken = null;
 let spotifyReady = false;
+let spotifyInitPromise = null;
+let spotifySDKPromise = null;
 
 window.spotifyArtistsRawData = null;
 
@@ -71,8 +72,7 @@ function normalizeDate(value) {
 function parseLocalDate(value) {
     const match = normalizeDate(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!match) return null;
-    const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
-    return date;
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12);
 }
 
 function formatDate(value) {
@@ -149,11 +149,24 @@ function matchesSearch(release, search) {
 
 /* ========== SPOTIFY : CONNEXION UTILISATEUR (PKCE) ========== */
 
+const SPOTIFY_STORAGE_KEYS = [
+    "spotify_access_token",
+    "spotify_refresh_token",
+    "spotify_token_expires_at",
+    "spotify_scopes"
+];
+
+function clearSpotifyTokens() {
+    for (const key of SPOTIFY_STORAGE_KEYS) localStorage.removeItem(key);
+    spotifyUserToken = null;
+}
+
 function generateRandomString(length) {
     const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    const values = crypto.getRandomValues(new Uint8Array(length));
     let text = "";
     for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
+        text += possible.charAt(values[i] % possible.length);
     }
     return text;
 }
@@ -168,6 +181,12 @@ async function generateCodeChallenge(verifier) {
 }
 
 async function startSpotifyLogin() {
+    // Spotify n'accepte que http://127.0.0.1:3000/ comme adresse de retour.
+    if (window.location.hostname !== "127.0.0.1") {
+        window.location.href = SPOTIFY_REDIRECT_URI;
+        return;
+    }
+
     const verifier = generateRandomString(64);
     const challenge = await generateCodeChallenge(verifier);
     localStorage.setItem("spotify_code_verifier", verifier);
@@ -186,71 +205,101 @@ async function startSpotifyLogin() {
     window.location.href = url;
 }
 
+function saveSpotifyTokens(data) {
+    spotifyUserToken = data.access_token;
+    localStorage.setItem("spotify_access_token", data.access_token);
+    localStorage.setItem("spotify_token_expires_at", String(Date.now() + (data.expires_in ?? 3600) * 1000));
+    localStorage.setItem("spotify_scopes", SPOTIFY_SCOPES);
+    if (data.refresh_token) {
+        localStorage.setItem("spotify_refresh_token", data.refresh_token);
+    }
+}
+
 async function handleSpotifyCallback() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
-    if (!code) return false;
+    const error = params.get("error");
+    if (!code && !error) return false;
+
+    // On nettoie l'URL tout de suite : le code ne peut être utilisé qu'une fois.
+    window.history.replaceState({}, "", window.location.pathname);
+
+    if (error) {
+        updatePlayerStatus(`Connexion Spotify refusée : ${error}`);
+        return false;
+    }
 
     const verifier = localStorage.getItem("spotify_code_verifier");
-    if (!verifier) return false;
+    if (!verifier) {
+        updatePlayerStatus("Connexion Spotify impossible : recommence la connexion.");
+        return false;
+    }
 
-    const response = await fetch("https://accounts.spotify.com/api/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-            grant_type: "authorization_code",
-            code,
-            redirect_uri: SPOTIFY_REDIRECT_URI,
-            client_id: SPOTIFY_CLIENT_ID,
-            code_verifier: verifier
-        })
-    });
+    try {
+        const response = await fetch("https://accounts.spotify.com/api/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                grant_type: "authorization_code",
+                code,
+                redirect_uri: SPOTIFY_REDIRECT_URI,
+                client_id: SPOTIFY_CLIENT_ID,
+                code_verifier: verifier
+            })
+        });
 
-    const data = await response.json();
-    if (!data.access_token) return false;
+        const data = await response.json();
+        if (!data.access_token) {
+            updatePlayerStatus("Connexion Spotify échouée : " + (data.error_description || data.error || "erreur inconnue"));
+            return false;
+        }
 
-    spotifyUserToken = data.access_token;
-    localStorage.setItem("spotify_access_token", data.access_token);
-    localStorage.setItem("spotify_refresh_token", data.refresh_token || "");
-    localStorage.setItem(
-        "spotify_token_expires_at",
-        String(Date.now() + (data.expires_in ?? 3600) * 1000)
-    );
-
-    window.history.replaceState({}, "", window.location.pathname);
-    return true;
+        saveSpotifyTokens(data);
+        localStorage.removeItem("spotify_code_verifier");
+        updatePlayerStatus("Connecté à Spotify — clique sur une sortie pour l'écouter");
+        return true;
+    } catch (err) {
+        console.error("Erreur de connexion Spotify :", err);
+        updatePlayerStatus("Connexion Spotify échouée : " + err.message);
+        return false;
+    }
 }
 
 async function refreshSpotifyUserToken() {
     const refreshToken = localStorage.getItem("spotify_refresh_token");
     if (!refreshToken) return false;
 
-    const response = await fetch("https://accounts.spotify.com/api/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-            grant_type: "refresh_token",
-            refresh_token: refreshToken,
-            client_id: SPOTIFY_CLIENT_ID
-        })
-    });
+    try {
+        const response = await fetch("https://accounts.spotify.com/api/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+                grant_type: "refresh_token",
+                refresh_token: refreshToken,
+                client_id: SPOTIFY_CLIENT_ID
+            })
+        });
 
-    const data = await response.json();
-    if (!data.access_token) return false;
+        const data = await response.json();
+        if (!data.access_token) return false;
 
-    spotifyUserToken = data.access_token;
-    localStorage.setItem("spotify_access_token", data.access_token);
-    localStorage.setItem(
-        "spotify_token_expires_at",
-        String(Date.now() + (data.expires_in ?? 3600) * 1000)
-    );
-    if (data.refresh_token) {
-        localStorage.setItem("spotify_refresh_token", data.refresh_token);
+        saveSpotifyTokens(data);
+        return true;
+    } catch (err) {
+        console.error("Erreur de rafraîchissement du token :", err);
+        return false;
     }
-    return true;
 }
 
 async function getSpotifyAccessToken() {
+    // Anciens jetons créés avec d'autres droits : on les jette pour forcer une reconnexion.
+    const storedScopes = localStorage.getItem("spotify_scopes");
+    if ((localStorage.getItem("spotify_access_token") || localStorage.getItem("spotify_refresh_token")) &&
+        storedScopes !== SPOTIFY_SCOPES) {
+        clearSpotifyTokens();
+        return null;
+    }
+
     const expiresAt = Number(localStorage.getItem("spotify_token_expires_at"));
 
     if (spotifyUserToken && expiresAt && Date.now() < expiresAt - 60000) {
@@ -267,43 +316,35 @@ async function getSpotifyAccessToken() {
     return refreshed ? spotifyUserToken : null;
 }
 
-/* ========== SPOTIFY : TOKEN APPLICATION ========== */
-
-async function getSpotifyAppToken() {
-    if (spotifyAppToken) return spotifyAppToken;
-
-    const response = await fetch("https://accounts.spotify.com/api/token", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Authorization: "Basic " + btoa(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`)
-        },
-        body: "grant_type=client_credentials"
-    });
-
-    if (!response.ok) return null;
-    const data = await response.json();
-    spotifyAppToken = data.access_token;
-    return spotifyAppToken;
+async function updateLoginButton() {
+    const button = $("spotify-login");
+    if (!button) return;
+    const token = await getSpotifyAccessToken();
+    button.textContent = token ? "Spotify connecté ✓" : "Se connecter à Spotify";
 }
 
 /* ========== SPOTIFY WEB PLAYBACK SDK ========== */
 
 function loadSpotifySDK() {
-    return new Promise((resolve, reject) => {
-        if (window.Spotify) return resolve();
+    if (window.Spotify) return Promise.resolve();
+    if (spotifySDKPromise) return spotifySDKPromise;
+
+    spotifySDKPromise = new Promise((resolve, reject) => {
         window.onSpotifyWebPlaybackSDKReady = () => resolve();
         const script = document.createElement("script");
         script.src = "https://sdk.scdn.co/spotify-player.js";
         script.async = true;
-        script.onerror = () => reject(new Error("Impossible de charger le SDK Spotify."));
+        script.onerror = () => {
+            spotifySDKPromise = null;
+            reject(new Error("Impossible de charger le SDK Spotify."));
+        };
         document.body.appendChild(script);
     });
+
+    return spotifySDKPromise;
 }
 
-async function initSpotifyPlayer() {
-    if (spotifyReady) return true;
-
+async function createSpotifyPlayer() {
     const token = await getSpotifyAccessToken();
     if (!token) {
         updatePlayerStatus("Connexion Spotify requise — clique sur « Se connecter à Spotify ».");
@@ -312,36 +353,92 @@ async function initSpotifyPlayer() {
 
     await loadSpotifySDK();
 
-    spotifyPlayer = new Spotify.Player({
-        name: "Spotify Artists Dashboard",
-        getOAuthToken: (cb) => {
-            getSpotifyAccessToken().then((t) => {
-                if (t) cb(t);
+    if (spotifyPlayer) {
+        spotifyPlayer.disconnect();
+        spotifyPlayer = null;
+    }
+
+    return new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+            if (settled) return;
+            settled = true;
+            resolve(value);
+        };
+
+        spotifyPlayer = new Spotify.Player({
+            name: "Spotify Artists Dashboard",
+            getOAuthToken: (cb) => {
+                getSpotifyAccessToken().then((t) => {
+                    if (t) cb(t);
+                });
+            }
+        });
+
+        // Nécessaire pour que le navigateur autorise la lecture automatique.
+        spotifyPlayer.activateElement();
+
+        spotifyPlayer.addListener("ready", ({ device_id }) => {
+            spotifyDeviceId = device_id;
+            spotifyReady = true;
+            updatePlayerStatus("Spotify prêt");
+            finish(true);
+        });
+
+        spotifyPlayer.addListener("not_ready", () => {
+            spotifyReady = false;
+            updatePlayerStatus("Spotify déconnecté");
+        });
+
+        const errorMessages = {
+            initialization_error: "Navigateur non compatible avec le lecteur Spotify.",
+            authentication_error: "Authentification refusée — reconnecte-toi à Spotify.",
+            account_error: "Un compte Spotify Premium est nécessaire pour la lecture.",
+            playback_error: "Erreur de lecture."
+        };
+
+        for (const type of Object.keys(errorMessages)) {
+            spotifyPlayer.addListener(type, ({ message }) => {
+                console.error(`Spotify ${type} :`, message);
+                updatePlayerStatus(`${errorMessages[type]} (${message})`);
+                if (type !== "playback_error") {
+                    spotifyReady = false;
+                    finish(false);
+                }
             });
         }
-    });
 
-    spotifyPlayer.addListener("ready", ({ device_id }) => {
-        spotifyDeviceId = device_id;
-        spotifyReady = true;
-        updatePlayerStatus("Spotify prêt — clique sur une sortie");
-    });
+        spotifyPlayer.addListener("player_state_changed", (state) => {
+            const track = state?.track_window?.current_track;
+            if (track) {
+                updatePlayerStatus(`Lecture : ${track.name} — ${track.artists[0].name}`);
+            }
+        });
 
-    spotifyPlayer.addListener("not_ready", () => {
-        spotifyReady = false;
-        updatePlayerStatus("Spotify déconnecté");
-    });
+        spotifyPlayer.connect().then((success) => {
+            if (!success) {
+                updatePlayerStatus("Impossible de connecter le lecteur Spotify.");
+                finish(false);
+            }
+        });
 
-    spotifyPlayer.addListener("player_state_changed", (state) => {
-        if (!state) return;
-        const track = state.track_window.current_track;
-        if (track) {
-            updatePlayerStatus(`Lecture : ${track.name} — ${track.artists[0].name}`);
-        }
+        setTimeout(() => {
+            if (!settled) {
+                updatePlayerStatus("Le lecteur Spotify ne répond pas. Réessaie.");
+            }
+            finish(spotifyReady);
+        }, 10000);
     });
+}
 
-    spotifyPlayer.connect();
-    return true;
+function initSpotifyPlayer() {
+    if (spotifyReady) return Promise.resolve(true);
+    if (spotifyInitPromise) return spotifyInitPromise;
+
+    spotifyInitPromise = createSpotifyPlayer().finally(() => {
+        spotifyInitPromise = null;
+    });
+    return spotifyInitPromise;
 }
 
 function updatePlayerStatus(message) {
@@ -366,7 +463,7 @@ async function searchTrackUri(release) {
     const title = getReleaseTitle(release);
     const artist = getReleaseArtist(release);
     const query = encodeURIComponent(`${artist} ${title}`);
-    const token = await getSpotifyAppToken();
+    const token = await getSpotifyAccessToken();
     if (!token) return null;
 
     const response = await fetch(
@@ -404,20 +501,38 @@ async function playRelease(release) {
             return;
         }
 
+        const body = uri.startsWith("spotify:track:") ? { uris: [uri] } : { context_uri: uri };
+
         const response = await fetch(
-            `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`,
+            `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(spotifyDeviceId)}`,
             {
                 method: "PUT",
                 headers: {
                     Authorization: `Bearer ${token}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ uris: [uri] })
+                body: JSON.stringify(body)
             }
         );
 
         if (!response.ok) {
-            updatePlayerStatus("Erreur lors du lancement de la lecture.");
+            let detail = "";
+            try {
+                const errorData = await response.json();
+                detail = errorData?.error?.message || "";
+            } catch {
+                // pas de détail disponible
+            }
+
+            if (response.status === 401) {
+                clearSpotifyTokens();
+                updateLoginButton();
+                updatePlayerStatus("Session Spotify expirée — reconnecte-toi.");
+            } else if (response.status === 403) {
+                updatePlayerStatus("Lecture refusée (403) : Premium requis ou droits manquants. Reconnecte-toi.");
+            } else {
+                updatePlayerStatus(`Erreur lors du lancement de la lecture (${response.status}) ${detail}`.trim());
+            }
             return;
         }
 
@@ -455,6 +570,7 @@ function renderReleases() {
 
     if (!list.length) {
         container.innerHTML = `<div class="empty">Aucune sortie trouvée pour le ${escapeHTML(formatDate(today))}.</div>`;
+        container.onclick = null;
         return;
     }
 
@@ -488,6 +604,7 @@ function renderReleases() {
         .join("");
 
     container.onclick = (event) => {
+        if (event.target.closest("a")) return;
         const card = event.target.closest(".release-card.clickable");
         if (!card) return;
         const release = list[Number(card.dataset.index)];
@@ -559,6 +676,7 @@ function renderAllReleases() {
                 <p>Essayez une autre recherche.</p>
             </div>
         `;
+        container.onclick = null;
         return;
     }
 
@@ -604,6 +722,7 @@ function renderAllReleases() {
     container.innerHTML = html.join("");
 
     container.onclick = (event) => {
+        if (event.target.closest("a")) return;
         const card = event.target.closest(".catalog-release-card.clickable");
         if (!card) return;
         const release = flatIndex.get(Number(card.dataset.index));
@@ -899,6 +1018,14 @@ function showError(elementId, message) {
 async function initialize() {
     displayCurrentDate();
 
+    // Retour de la page de connexion Spotify (le code d'autorisation est dans l'URL).
+    try {
+        await handleSpotifyCallback();
+    } catch (error) {
+        console.error("Erreur pendant le retour Spotify :", error);
+    }
+    updateLoginButton().catch(() => {});
+
     const [releasesResult, artistsResult] = await Promise.allSettled([
         loadJSON(RELEASES_FILE),
         loadJSON(ARTISTS_FILE)
@@ -940,11 +1067,6 @@ async function initialize() {
 
     if (releasesResult.status === "fulfilled") renderPage("releases");
     if (artistsResult.status === "fulfilled") renderPage("artists");
-
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("code")) {
-        await handleSpotifyCallback();
-    }
 }
 
 /* ========== DÉMARRAGE ========== */
