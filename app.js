@@ -977,4 +977,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     initialize().catch((error) => {
-        console.error("Erreur pendant l'initialisation
+        console.error("Erreur pendant l'initialisation du dashboard :", error);
+    });
+});
