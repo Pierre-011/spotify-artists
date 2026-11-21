@@ -4,7 +4,9 @@ const ARTISTS_FILE = "./data/artistes.json";
 const RELEASES_FILE = "./data/sorties.json";
 
 const SPOTIFY_CLIENT_ID = "670e4b53420b45fcb95cd5d224c25f6d";
-const SPOTIFY_REDIRECT_URI = "http://127.0.0.1:3000/";
+// Adresse de retour = adresse de la page elle-même (GitHub Pages ou serveur local).
+// Elle doit être enregistrée à l'identique dans le dashboard développeur Spotify.
+const SPOTIFY_REDIRECT_URI = window.location.origin + window.location.pathname.replace(/index\.html$/, "");
 const SPOTIFY_SCOPES =
     "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state";
 
@@ -181,11 +183,18 @@ async function generateCodeChallenge(verifier) {
 }
 
 async function startSpotifyLogin() {
-    // Spotify n'accepte que http://127.0.0.1:3000/ comme adresse de retour.
-    if (window.location.hostname !== "127.0.0.1") {
-        window.location.href = SPOTIFY_REDIRECT_URI;
+    if (!/^https?:$/.test(window.location.protocol)) {
+        updatePlayerStatus("Ouvre le site via une adresse http(s) (GitHub Pages ou serveur local), pas en double-cliquant sur le fichier.");
         return;
     }
+
+    // Spotify refuse « localhost » : en local, il faut utiliser 127.0.0.1.
+    if (window.location.hostname === "localhost") {
+        updatePlayerStatus("Ouvre le site sur 127.0.0.1 au lieu de localhost, puis reclique sur « Se connecter à Spotify ».");
+        return;
+    }
+
+    console.info("Adresse de retour Spotify utilisée :", SPOTIFY_REDIRECT_URI);
 
     const verifier = generateRandomString(64);
     const challenge = await generateCodeChallenge(verifier);
