@@ -1281,14 +1281,23 @@ footer {
     cursor: pointer;
     font-size: 14px;
 }
-/* Lecteur Spotify intégré (barre du bas) */
+
+/* =========================================================
+   Lecteur Spotify intégré (barre du bas) : responsive + économe
+   ========================================================= */
+
+:root {
+    --player-height: 0px; /* mise à jour automatiquement par app.js */
+}
 
 .spotify-player-bar {
     gap: 16px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    contain: layout style; /* limite les recalculs de mise en page à la barre */
 }
 
 .player-info {
-    flex: 0 1 260px;
+    flex: 0 1 240px;
     min-width: 0;
 }
 
@@ -1315,19 +1324,39 @@ footer {
     border-radius: 12px;
 }
 
-/* Laisse la place à la barre pour ne pas masquer le bas de la page */
-body.has-player {
-    padding-bottom: 190px;
+/* Hauteur adaptée au type de lecteur (titre ou album) */
+.player-embed[data-type="track"] iframe {
+    height: 80px;
 }
 
+.player-embed[data-type="album"] iframe {
+    height: 152px;
+}
+
+/* Laisse la place à la barre pour ne pas masquer le bas de la page */
+body.has-player {
+    padding-bottom: calc(var(--player-height) + 16px);
+}
+
+/* ---------- Tablette ---------- */
+@media (max-width: 900px) {
+    .player-info {
+        flex-basis: 150px;
+    }
+}
+
+/* ---------- Mobile ---------- */
 @media (max-width: 700px) {
     .spotify-player-bar {
         flex-wrap: wrap;
-        padding-right: 44px;
+        gap: 6px;
+        padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
     }
 
     .player-info {
         flex: 1 1 100%;
+        padding-right: 36px;
+        font-size: 12px;
     }
 
     .player-embed {
@@ -1337,7 +1366,62 @@ body.has-player {
 
     .player-close {
         position: absolute;
-        top: 8px;
-        right: 12px;
+        top: 6px;
+        right: 10px;
+        padding: 6px;
     }
+}
+
+/* ---------- Écrans peu hauts (téléphone en paysage) ---------- */
+@media (max-height: 520px) {
+    .spotify-player-bar {
+        flex-wrap: nowrap;
+        padding-top: 6px;
+        padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .player-info {
+        display: none;
+    }
+
+    .player-embed {
+        flex: 1 1 auto;
+        max-width: none;
+    }
+
+    .player-close {
+        position: static;
+    }
+}
+
+/* =========================================================
+   Performances
+   ========================================================= */
+
+/* Le navigateur saute le rendu des sections de la liste qui sont hors écran */
+.release-day {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
+}
+
+/* Pendant la lecture, on coupe les animations de survol pour économiser le processeur */
+body.has-player .release-card,
+body.has-player .catalog-release-card,
+body.has-player .stat-card,
+body.has-player .spotify-button,
+body.has-player .catalog-cover,
+body.has-player .monthly-bar-fill {
+    transition: none;
+}
+
+body.has-player .release-card:hover,
+body.has-player .catalog-release-card:hover,
+body.has-player .stat-card:hover,
+body.has-player .spotify-button:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+body.has-player .catalog-release-card:hover .catalog-cover {
+    transform: none;
 }
