@@ -8,9 +8,214 @@ let releases = [];
 let currentPage = "releases";
 let statsCache = null;
 
-// Conserve la structure originale de artistes.json.
-// Instagram Finder en a besoin pour exporter un JSON compatible.
+/* Conserve la structure originale de artistes.json */
 window.spotifyArtistsRawData = null;
+
+
+/* ========== SPOTIFY WEB PLAYBACK SDK ========== */
+
+const SPOTIFY_CONFIG = {
+    tokenEndpoint: "/api/spotify/token",
+    searchEndpoint: "/api/spotify/search"
+};
+
+let spotifyPlayer = null;
+let spotifyDeviceId = null;
+let spotifyAccessToken = null;
+let spotifyReady = false;
+
+function loadSpotifySDK() {
+    return new Promise((resolve) => {
+        if (window.Spotify) {
+            resolve();
+            return;
+        }
+
+        window.onSpotifyWebPlaybackSDKReady = () => resolve();
+
+        const script = document.createElement("script");
+        script.src = "https://sdk.scdn.co/spotify-player.js";
+        script.async = true;
+        document.body.appendChild(script);
+    });
+}
+
+async function getSpotifyAccessToken() {
+    if (spotifyAccessToken) {
+        return spotifyAccessToken;
+    }
+
+    const response = await fetch(SPOTIFY_CONFIG.tokenEndpoint);
+
+    if (!response.ok) {
+        throw new Error("Impossible de récupérer le token Spotify.");
+    }
+
+    const data = await response.json();
+    spotifyAccessToken = data.access_token;
+
+    return spotifyAccessToken;
+}
+
+async function initSpotifyPlayer() {
+    if (spotifyReady) {
+        return;
+    }
+
+    await loadSpotifySDK();
+
+    const token = await getSpotifyAccessToken();
+
+    spotifyPlayer = new Spotify.Player({
+        name: "Spotify Artists Dashboard",
+        getOAuthToken: (callback) => {
+            getSpotifyAccessToken().then(callback);
+        }
+    });
+
+    spotifyPlayer.addListener("ready", ({ device_id }) => {
+        spotifyDeviceId = device_id;
+        spotifyReady = true;
+        updatePlayerStatus("Spotify prêt — clique sur une sortie");
+    });
+
+    spotifyPlayer.addListener("not_ready", () => {
+        spotifyReady = false;
+        updatePlayerStatus("Spotify déconnecté");
+    });
+
+    spotifyPlayer.addListener("player_state_changed", (state) => {
+        if (!state) return;
+
+        const track = state.track_window.current_track;
+
+        if (track) {
+            updatePlayerStatus(
+                `Lecture : ${track.name} — ${track.artists[0].name}`
+            );
+        }
+    });
+
+    spotifyPlayer.connect();
+}
+
+function updatePlayerStatus(message) {
+    const status = $("player-status");
+    const bar = $("spotify-player-bar");
+
+    if (status) {
+        status.textContent = message;
+    }
+
+    if (bar) {
+        bar.classList.remove("hidden");
+    }
+}
+
+function getTrackUri(release) {
+    if (release.uri) {
+        return release.uri;
+    }
+
+    if (release.track_uri) {
+        return release.track_uri;
+    }
+
+    const url = getReleaseURL(release);
+
+    if (url) {
+        const match = url.match(/track\/([a-zA-Z0-9]+)/);
+
+        if (match) {
+            return `spotify:track:${match[1]}`;
+        }
+    }
+
+    return null;
+}
+
+async function searchTrackUri(release) {
+    const title = getReleaseTitle(release);
+    const artist = getReleaseArtist(release);
+    const query = encodeURIComponent(`${artist} ${title}`);
+
+    const token = await getSpotifyAccessToken();
+
+    const response = await fetch(
+        `https://api.spotify.com/v1/search?q=${query}&type=track&limit=1`,
+        {
+            headers: {
+                Authorization: `Bearer ${token}`
+            }
+        }
+    );
+
+    if (!response.ok) {
+        return null;
+    }
+
+    const data = await response.json();
+    const track = data.tracks?.items?.[0];
+
+    return track ? track.uri : null;
+}
+
+async function playRelease(release) {
+    try {
+        await initSpotifyPlayer();
+
+        if (!spotifyReady || !spotifyDeviceId) {
+            updatePlayerStatus(
+                "Spotify n'est pas encore prêt, réessaie dans quelques secondes."
+            );
+
+            return;
+        }
+
+        let uri = getTrackUri(release);
+
+        if (!uri) {
+            uri = await searchTrackUri(release);
+        }
+
+        if (!uri) {
+            updatePlayerStatus(
+                "Aucun titre Spotify trouvé pour cette sortie."
+            );
+
+            return;
+        }
+
+        const token = await getSpotifyAccessToken();
+
+        const response = await fetch(
+            `https://api.spotify.com/v1/me/player/play?device_id=${spotifyDeviceId}`,
+            {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    uris: [uri]
+                })
+            }
+        );
+
+        if (!response.ok) {
+            updatePlayerStatus(
+                "Erreur lors du lancement de la lecture."
+            );
+
+            return;
+        }
+
+        updatePlayerStatus("Lecture lancée sur Spotify");
+    } catch (error) {
+        console.error("Erreur Spotify :", error);
+        updatePlayerStatus("Erreur Spotify : " + error.message);
+    }
+}
 
 
 /* ========== UTILITAIRES ========== */
@@ -383,13 +588,16 @@ function renderReleases() {
     }
 
     container.innerHTML = list
-        .map(release => {
+        .map((release, index) => {
             const title = getReleaseTitle(release);
             const image = getReleaseImage(release);
             const url = getReleaseURL(release);
 
             return `
-                <article class="release-card">
+                <article
+                    class="release-card clickable"
+                    data-release-index="${index}"
+                >
 
                     ${
                         image
@@ -447,12 +655,29 @@ function renderReleases() {
             `;
         })
         .join("");
+
+    container.onclick = (event) => {
+        const card = event.target.closest(
+            ".release-card.clickable"
+        );
+
+        if (!card) {
+            return;
+        }
+
+        const index = Number(card.dataset.releaseIndex);
+        const release = list[index];
+
+        if (release) {
+            playRelease(release);
+        }
+    };
 }
 
 
 /* ========== TOUTES LES SORTIES ========== */
 
-function renderCatalogCard(release, date) {
+function renderCatalogCard(release, date, index) {
     const title = getReleaseTitle(release);
     const artist = getReleaseArtist(release);
     const image = getReleaseImage(release);
@@ -460,7 +685,10 @@ function renderCatalogCard(release, date) {
     const type = getReleaseType(release) || "release";
 
     return `
-        <article class="catalog-release-card">
+        <article
+            class="catalog-release-card clickable"
+            data-release-index="${index}"
+        >
 
             <div class="catalog-cover-wrapper">
 
@@ -631,6 +859,9 @@ function renderAllReleases() {
     }
 
     const html = [];
+    const flatIndex = new Map();
+
+    let currentIndex = 0;
 
     for (const [date, items] of groups) {
         const unknown = date === "unknown";
@@ -668,9 +899,19 @@ function renderAllReleases() {
                 <div class="release-day-grid">
 
                     ${items
-                        .map(release =>
-                            renderCatalogCard(release, date)
-                        )
+                        .map(release => {
+                            flatIndex.set(currentIndex, release);
+
+                            const card = renderCatalogCard(
+                                release,
+                                date,
+                                currentIndex
+                            );
+
+                            currentIndex++;
+
+                            return card;
+                        })
                         .join("")}
 
                 </div>
@@ -680,6 +921,23 @@ function renderAllReleases() {
     }
 
     container.innerHTML = html.join("");
+
+    container.onclick = (event) => {
+        const card = event.target.closest(
+            ".catalog-release-card.clickable"
+        );
+
+        if (!card) {
+            return;
+        }
+
+        const index = Number(card.dataset.releaseIndex);
+        const release = flatIndex.get(index);
+
+        if (release) {
+            playRelease(release);
+        }
+    };
 }
 
 
@@ -1173,16 +1431,6 @@ function renderStatistics() {
 
 /* ========== INSTAGRAM FINDER ========== */
 
-/*
- * Instagram Finder est rendu par instagram-finder.js.
- *
- * On lui signale l'ouverture de la page afin qu'il puisse
- * actualiser son affichage si ce script écoute cet événement.
- *
- * Les données originales sont disponibles dans :
- * window.spotifyArtistsRawData
- */
-
 function renderInstagramFinder() {
     const container = $("instagram-finder-card");
 
@@ -1344,18 +1592,10 @@ async function initialize() {
     /* Chargement des artistes */
 
     if (artistsResult.status === "fulfilled") {
-        /*
-         * On garde le JSON original intact pour permettre
-         * à Instagram Finder de conserver sa structure.
-         */
         window.spotifyArtistsRawData = artistsResult.value;
 
         artists = parseArtists(artistsResult.value);
 
-        /*
-         * L'événement permet aussi au script Instagram Finder
-         * de savoir que les données viennent d'être chargées.
-         */
         document.dispatchEvent(
             new CustomEvent("spotify-artists-loaded", {
                 detail: {
@@ -1399,13 +1639,17 @@ async function initialize() {
         renderPage("artists");
     }
 
-    /*
-     * Si l'utilisateur est déjà sur Instagram Finder,
-     * on le rafraîchit une fois les données chargées.
-     */
     if (currentPage === "instagram-finder") {
         renderPage("instagram-finder");
     }
+
+    /* Préparation du lecteur Spotify */
+    initSpotifyPlayer().catch(error => {
+        console.error(
+            "Erreur initialisation Spotify :",
+            error
+        );
+    });
 }
 
 
@@ -1425,6 +1669,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     setupNavigation();
+
+    const closeButton = $("player-close");
+
+    if (closeButton) {
+        closeButton.addEventListener("click", () => {
+            $("spotify-player-bar")?.classList.add("hidden");
+        });
+    }
 
     initialize().catch(error => {
         console.error(
